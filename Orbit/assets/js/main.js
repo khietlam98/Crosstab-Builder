@@ -388,6 +388,22 @@ function collectTablesFromInput() {
     return null;
   }
 
+  const askedBaseLines = askedBaseTextInput.value
+  .split(",")
+  .map(item => item.trim())
+  .filter(item => item !== "");
+
+if (baseTypeSelect.value === "asked_base" && questionCodes.length > 1) {
+  if (askedBaseLines.length > 1 && askedBaseLines.length !== questionCodes.length) {
+    alert(
+      "Number of Asked Base items must match number of question codes.\n\n" +
+      "Question codes: " + questionCodes.length + "\n" +
+      "Asked Base items: " + askedBaseLines.length
+    );
+    return null;
+  }
+}
+
   const subtitleLines = subtitleOnlyInput.value
     .split("\n")
     .map(line => line.trim())
@@ -409,7 +425,6 @@ const arrayGroupId = isArrayRange ? "array_" + Date.now() : "";
 
 return questionCodes.map((code, index) => {
   return {
-    projectType: projectTypeSelect.value || "N2",
     questionCode: code,
     questionType: questionTypeSelect.value,
     rowType: rowTypeSelect.value,
@@ -418,7 +433,7 @@ return questionCodes.map((code, index) => {
     useDS: useDSCheckbox.checked,
     subtitleOnly: subtitleLines[index] || subtitleLines[0] || "",
     baseType: baseTypeSelect.value,
-    askedBaseText: askedBaseTextInput.value.trim(),
+    askedBaseText: askedBaseLines[index] || askedBaseLines[0] || "",
     manualUseIndex: manualUseIndexInput.value.trim(),
     answerOptions: answerOptionsInput.value.trim(),
 
