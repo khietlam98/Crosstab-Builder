@@ -31,8 +31,9 @@ body {
 
 .main-layout {
   display: grid;
-  grid-template-columns: 0.9fr 1.3fr;
+  grid-template-columns: 430px minmax(0, 1fr);
   gap: 18px;
+  align-items: start;
 }
 
 .card {
