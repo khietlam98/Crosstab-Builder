@@ -847,36 +847,39 @@ function collectTablesFromInput() {
   }
 
   return metrics.map(metric => {
-    return {
-      projectType: projectTypeSelect.value || "N2",
-      questionCode: questionCodes[0],
-      questionType: "ranking_table",
-      rowType: "ranking_table",
-      questionText: buildRankingTitle(questionText, metric.label),
-      useST: false,
-      useDS: false,
-      subtitleOnly: "",
-      baseType: baseTypeSelect.value,
-      askedBaseText: askedBaseTextInput.value.trim(),
-      manualUseIndex: "",
-      answerOptions: "",
+  return {
+    projectType: projectTypeSelect.value || "N2",
+    questionCode: questionCodes[0],
+    questionType: "ranking_table",
+    rowType: "ranking_table",
+    questionText: buildRankingTitle(questionText, metric.label),
+    useST: false,
+    useDS: false,
+    subtitleOnly: "",
+    baseType: baseTypeSelect.value,
+    askedBaseText: askedBaseTextInput.value.trim(),
+    manualUseIndex: "",
+    answerOptions: "",
 
-      metricLabel: metric.label,
-      metricCode: metric.code,
-      rankingItems: rankingItems,
+    metricLabel: metric.label,
+    metricCode: metric.code,
 
-      useSplitAB: useSplitABCheckbox.checked,
-      splitVariable: splitVariableInput.value.trim() || "SplitAB",
-      splitACode: splitACodeInput.value.trim() || "1",
-      splitBCode: splitBCodeInput.value.trim() || "2",
-      splitOptions: splitOptionsInput.value.trim() || "HR,SX",
+    rankingMetricDefinitions: rankingMetricDefinitionsInput.value.trim(),
+    rankingItemsRaw: rankingItemsInput.value.trim(),
+    rankingItems: rankingItems,
 
-      summaryRaw: "",
-      summaryBlocks: [],
-      arrayGroupId: "",
-      arrayPosition: 0
-    };
-  });
+    useSplitAB: useSplitABCheckbox.checked,
+    splitVariable: splitVariableInput.value.trim() || "SplitAB",
+    splitACode: splitACodeInput.value.trim() || "1",
+    splitBCode: splitBCodeInput.value.trim() || "2",
+    splitOptions: splitOptionsInput.value.trim() || "HR,SX",
+
+    summaryRaw: "",
+    summaryBlocks: [],
+    arrayGroupId: "",
+    arrayPosition: 0
+  };
+});
 }
 
   if (questionTypeSelect.value === "summary_table") {
@@ -1021,47 +1024,78 @@ function editTable(index) {
 
   toggleQuestionTypeUI();
 
-  if (table.questionType === "summary_table") {
-    summaryRawInput.value = table.summaryRaw || "";
-    summaryBlockCountInput.value = table.summaryBlocks?.length || "";
-    buildSummarySetup();
+if (table.questionType === "summary_table") {
+  summaryRawInput.value = table.summaryRaw || "";
+  summaryBlockCountInput.value = table.summaryBlocks?.length || "";
+  buildSummarySetup();
 
-    const cards = [...summaryBlockSetupContainer.querySelectorAll(".summary-block-card")];
+  const cards = [...summaryBlockSetupContainer.querySelectorAll(".summary-block-card")];
 
-    cards.forEach((card, i) => {
-      const block = table.summaryBlocks[i];
-      if (!block) return;
+  cards.forEach((card, i) => {
+    const block = table.summaryBlocks[i];
+    if (!block) return;
 
-      card.querySelector(".summary-title-input").value = block.title || "";
-      card.querySelector(".summary-positive-select").value = block.positiveLabel || "";
-      card.querySelector(".summary-negative-select").value = block.negativeLabel || "";
-      card.querySelector(".summary-suffix-input").value = block.suffix || "SX,L-";
-    });
-  } else {
-    rowTypeSelect.value = table.rowType;
-    answerOptionsInput.value = table.answerOptions || "";
-    useSTCheckbox.checked = table.useST;
-    useDSCheckbox.checked = table.useDS !== false;
-    subtitleOnlyInput.value = table.subtitleOnly || "";
-    manualUseIndexInput.value = table.manualUseIndex || "";
+    card.querySelector(".summary-title-input").value = block.title || "";
+    card.querySelector(".summary-positive-select").value = block.positiveLabel || "";
+    card.querySelector(".summary-negative-select").value = block.negativeLabel || "";
+    card.querySelector(".summary-suffix-input").value = block.suffix || "SX,L-";
+  });
+
+} else if (table.questionType === "ranking_table") {
+  rankingMetricDefinitionsInput.value = table.rankingMetricDefinitions || "";
+  rankingItemsInput.value = table.rankingItemsRaw || "";
+
+  useSplitABCheckbox.checked = table.useSplitAB || false;
+  splitVariableInput.value = table.splitVariable || "SplitAB";
+  splitACodeInput.value = table.splitACode || "1";
+  splitBCodeInput.value = table.splitBCode || "2";
+  splitOptionsInput.value = table.splitOptions || "HR,SX";
+
+  toggleSplitABBox();
+
+  rankingSplitTableContainer.innerHTML = "";
+
+  if (table.rankingItems && table.rankingItems.length > 0) {
+    const rows = table.rankingItems.map((item, index) => {
+      return `
+        <tr>
+          <td>${item.questionCode}</td>
+          <td>${item.label}</td>
+          <td>
+            <select class="ranking-split-select" data-index="${index}">
+              <option value="">Blank</option>
+              <option value="1" ${item.splitSuffix === "1" ? "selected" : ""}>1</option>
+              <option value="2" ${item.splitSuffix === "2" ? "selected" : ""}>2</option>
+            </select>
+          </td>
+        </tr>
+      `;
+    }).join("");
+
+    rankingSplitTableContainer.innerHTML = `
+      <table class="ranking-split-table">
+        <thead>
+          <tr>
+            <th>Question Code</th>
+            <th>Code Label</th>
+            <th>Split Code</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+    `;
   }
 
-  baseTypeSelect.value = table.baseType;
-  askedBaseTextInput.value = table.askedBaseText || "";
-
-  toggleAnswerOptionsBox();
-  toggleSubtitleBox();
-  toggleAskedBaseBox();
-
-  addBtn.textContent = "Update Table";
-  cancelEditBtn.classList.remove("hidden");
-
-  renderInputList();
-
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth"
-  });
+} else {
+  rowTypeSelect.value = table.rowType;
+  answerOptionsInput.value = table.answerOptions || "";
+  useSTCheckbox.checked = table.useST;
+  useDSCheckbox.checked = table.useDS !== false;
+  subtitleOnlyInput.value = table.subtitleOnly || "";
+  manualUseIndexInput.value = table.manualUseIndex || "";
+}
 }
 
 function deleteTable(index) {
