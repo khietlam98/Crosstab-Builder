@@ -1,13 +1,27 @@
+/* =========================
+   GLOBAL RESET
+========================= */
+
 * {
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
+  min-height: 100%;
+}
+
+body {
   font-family: Arial, sans-serif;
   background: #f4f4f4;
   color: #111;
+  overflow-x: hidden;
 }
+
+/* =========================
+   APP LAYOUT
+========================= */
 
 .app {
   max-width: 1500px;
@@ -24,17 +38,23 @@ body {
   font-size: 30px;
 }
 
+/*
+  Input width linh động:
+  - nhỏ nhất 430px
+  - ưu tiên 32vw màn hình
+  - lớn nhất 560px
+  Output tự lấy phần còn lại
+*/
 .main-layout {
   display: grid;
-  grid-template-columns: 430px minmax(0, 1fr);
+  grid-template-columns: clamp(430px, 32vw, 560px) minmax(0, 1fr);
   gap: 18px;
   align-items: stretch;
 }
 
-.input-card,
-.output-card {
-  min-height: 820px;
-}
+/* =========================
+   CARDS
+========================= */
 
 .card {
   min-width: 0;
@@ -52,6 +72,26 @@ body {
 .full {
   grid-column: 1 / -1;
 }
+
+.input-card {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.output-card {
+  width: 100%;
+  min-width: 0;
+  height: 860px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* =========================
+   FORM ELEMENTS
+========================= */
 
 .form-group {
   margin-bottom: 16px;
@@ -74,6 +114,8 @@ input,
 select,
 textarea {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   border: 1px solid #aaa;
   border-radius: 8px;
   padding: 10px 12px;
@@ -84,6 +126,9 @@ textarea {
 textarea {
   min-height: 82px;
   resize: vertical;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .checkbox-row {
@@ -100,6 +145,10 @@ textarea {
 .checkbox-row label {
   margin: 0;
 }
+
+/* =========================
+   BUTTONS
+========================= */
 
 .button-row {
   display: flex;
@@ -135,6 +184,10 @@ button.danger {
   background: #991b1b;
 }
 
+/* =========================
+   SECTION TITLE
+========================= */
+
 .section-title {
   display: flex;
   align-items: center;
@@ -147,18 +200,14 @@ button.danger {
   margin: 0;
 }
 
-.output-card {
-  height: 860px;
-  overflow: hidden;
-}
+/* =========================
+   OUTPUT SYNTAX
+========================= */
 
 .output-card pre {
   width: 100%;
   min-width: 0;
-
-  height: 750px;
-  max-height: 750px;
-
+  flex: 1;
   overflow: auto;
   white-space: pre;
 
@@ -171,6 +220,10 @@ button.danger {
   font-size: 14px;
   line-height: 1.35;
 }
+
+/* =========================
+   INPUT LIST
+========================= */
 
 .input-list {
   max-height: 430px;
@@ -186,19 +239,21 @@ button.danger {
   background: #fafafa;
   padding: 12px;
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 14px;
 }
 
 .input-title {
   font-weight: bold;
   margin-bottom: 4px;
+  word-break: break-word;
 }
 
 .input-meta {
   font-size: 13px;
   color: #374151;
   line-height: 1.5;
+  word-break: break-word;
 }
 
 .badge {
@@ -228,16 +283,23 @@ button.danger {
   font-style: italic;
 }
 
-.hidden {
-  display: none;
-}
-
 .editing-note {
   background: #fff7ed;
   border: 1px solid #fdba74;
 }
 
+/* =========================
+   SUMMARY / RANKING SETUP
+========================= */
+
+.hidden {
+  display: none;
+}
+
 .summary-box {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
   border: 1px solid #ddd;
   background: #fbfbfb;
   border-radius: 12px;
@@ -249,37 +311,77 @@ button.danger {
   margin-top: 0;
 }
 
+.summary-raw,
+#summaryRawInput,
+#rankingMetricDefinitions,
+#rankingItemsInput {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: Consolas, "Courier New", monospace;
+}
+
 .summary-raw {
   min-height: 180px;
-  font-family: Consolas, "Courier New", monospace;
+}
+
+#rankingMetricDefinitions {
+  min-height: 160px;
+}
+
+#rankingItemsInput {
+  min-height: 230px;
+}
+
+#rankingSetupPanel,
+#summarySetupPanel {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .summary-control-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: end;
 }
 
+.summary-preview-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+/* =========================
+   SUMMARY MODAL BLOCKS
+========================= */
+
 .summary-block-container {
   display: grid;
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(320px, 1fr));
+  gap: 16px;
 }
 
 .summary-block-card {
   border: 1px solid #ccc;
-  border-radius: 10px;
+  border-radius: 12px;
   background: #fff;
-  padding: 12px;
+  padding: 14px;
+  min-width: 0;
 }
 
 .summary-block-card h4 {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
+  font-size: 18px;
 }
 
 .summary-block-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
 }
 
@@ -287,30 +389,19 @@ button.danger {
   grid-column: 1 / -1;
 }
 
-@media (max-width: 900px) {
-  .main-layout {
-    grid-template-columns: 1fr;
-  }
+/* =========================
+   SPLIT / MINI GRID
+========================= */
 
-  .section-title {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .input-item {
-    grid-template-columns: 1fr;
-  }
-
-  .item-actions {
-    flex-direction: row;
-    justify-content: flex-start;
-  }
-
-  .summary-control-row,
-  .summary-block-grid {
-    grid-template-columns: 1fr;
-  }
+.mini-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 0.7fr 0.7fr 1fr;
+  gap: 8px;
 }
+
+/* =========================
+   MODAL
+========================= */
 
 .modal-overlay {
   position: fixed;
@@ -373,62 +464,15 @@ button.danger {
   justify-content: flex-end;
 }
 
-.summary-preview-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 12px;
-}
-
-.summary-block-container {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(320px, 1fr));
-  gap: 16px;
-}
-
-.summary-block-card {
-  border: 1px solid #ccc;
-  border-radius: 12px;
-  background: #fff;
-  padding: 14px;
-}
-
-.summary-block-card h4 {
-  margin: 0 0 12px;
-  font-size: 18px;
-}
-
-.summary-block-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.summary-block-grid .wide {
-  grid-column: 1 / -1;
-}
-
-@media (max-width: 900px) {
-  .summary-block-container {
-    grid-template-columns: 1fr;
-  }
-
-  .modal-box {
-    width: 96vw;
-    max-height: 92vh;
-  }
-}
-
-.mini-grid {
-  display: grid;
-  grid-template-columns: 1.3fr 0.7fr 0.7fr 1fr;
-  gap: 8px;
-}
-
 .modal-help {
   margin-top: 0;
   color: #555;
   font-size: 14px;
 }
+
+/* =========================
+   RANKING SPLIT TABLE
+========================= */
 
 .ranking-split-table {
   width: 100%;
@@ -452,8 +496,71 @@ button.danger {
   width: 90px;
 }
 
+/* =========================
+   RESPONSIVE
+========================= */
+
 @media (max-width: 900px) {
+  .app {
+    padding: 16px;
+  }
+
+  .main-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .output-card {
+    height: 720px;
+  }
+
+  .section-title {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .input-item {
+    grid-template-columns: 1fr;
+  }
+
+  .item-actions {
+    flex-direction: row;
+    justify-content: flex-start;
+  }
+
+  .summary-control-row,
+  .summary-block-grid,
   .mini-grid {
     grid-template-columns: 1fr;
   }
+
+  .summary-block-container {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-box {
+    width: 96vw;
+    max-height: 92vh;
+  }
+}
+
+.input-card,
+.output-card {
+  height: 860px;
+  min-height: 860px;
+  overflow: hidden;
+}
+
+.input-card {
+  overflow-y: auto;
+}
+
+.output-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.output-card pre {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
