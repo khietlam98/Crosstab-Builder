@@ -1,2 +1,2 @@
 ﻿# Crosstab-Builder
-https://khietlam98.github.io/Crosstab-Builder/Orbit/index.html
+https://khietlam98.github.io/Crosstab-Builder/index.html
