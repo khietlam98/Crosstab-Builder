@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>WinCross Syntax Builder</title>
+
+  <link rel="stylesheet" href="assets/css/main.css" />
+</head>
+
+<body>
+  <div class="app">
+
+    <header class="header">
+      <h1>WinCross Syntax Builder</h1>
+    </header>
+
+    <main class="main-layout">
+
+      <section class="card input-card">
+        <h2>Input</h2>
+
+        <div class="form-group">
+          <label for="projectType">Project Setting</label>
+          <select id="projectType">
+            <option value="N2" selected>N2</option>
+            <option value="P2">P2</option>
+            <option value="F4">F4</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="questionCode">Question Code / Table Code</label>
+          <input id="questionCode" type="text" placeholder="Example: Q1, Q1:5, or 1 for summary table" />
+          <small>Single/Array dùng Q1, Q1:5. Summary có thể nhập 1 để output T1.</small>
+        </div>
+
+        <div class="form-group">
+          <label for="questionType">Question Type</label>
+          <select id="questionType">
+            <option value="" selected disabled>Please select a type...</option>
+            <option value="single_choice">Single-choice</option>
+            <option value="summary_table">Summary Table</option>
+            <option value="ranking_table">Ranking Table</option>
+            <option value="array">Array</option>
+          </select>
+        </div>
+
+        <div id="rowTypeBox" class="form-group">
+          <label for="rowType">Row Type</label>
+          <select id="rowType">
+            <option value="" selected disabled>Please select a type...</option>
+            <option value="custom_code">CUSTOM CODE</option>
+            <option value="important">TOT IMPORTANT / TOT NOT IMPORTANT</option>
+            <option value="good_bad">TOT GOOD / TOT BAD</option>
+            <option value="agree_disagree">TOT AGREE / TOT DISAGREE</option>
+            <option value="accept_unaccept">TOT ACCEPT / TOT UNACCEPT</option>
+            <option value="confident_not_confident">TOT CONFIDENT / TOT NOT CONFIDENT</option>
+            <option value="yes_no">TOT YES / TOT NO</option>
+            <option value="more_less_likely">TOT MORE LIKELY / TOT LESS LIKELY</option>
+            <option value="convincing_not_convincing">TOT CONVINCING / TOT NOT CONVINCING</option>
+            <option value="adequate_inadequate">TOT ADEQUATE / TOT INADEQUATE</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="questionText">Question Text / Summary Title</label>
+          <textarea id="questionText" placeholder="Example: SUMMARY OF KEY DATA"></textarea>
+          <small>Summary table sẽ output dòng này trực tiếp, không thêm QUESTION X:|.</small>
+        </div>
+
+        <div id="answerOptionsBox" class="form-group hidden">
+          <label for="answerOptions">Answer Options</label>
+          <textarea id="answerOptions" placeholder="Paste answer options here. Example:
+1	DEFINITELY YES
+2	PROBABLY YES
+3	UNDECIDED, LEAN YES"></textarea>
+          <small>Chỉ hiện khi Row Type = CUSTOM CODE.</small>
+        </div>
+
+        <div id="normalOptionsBox">
+          <div class="checkbox-row">
+            <input id="useST" type="checkbox" />
+            <label for="useST">Active ST</label>
+          </div>
+
+          <div id="subtitleBox" class="form-group hidden">
+            <label for="subtitleOnly">Subtitle Text</label>
+            <textarea id="subtitleOnly" placeholder="For range Q1:5, paste one subtitle per line."></textarea>
+          </div>
+
+          <div class="checkbox-row">
+            <input id="useDS" type="checkbox" checked />
+            <label for="useDS">Active D/S</label>
+          </div>
+
+          <div class="form-group">
+            <label for="manualUseIndex">USE Index</label>
+            <input id="manualUseIndex" type="number" placeholder="Optional. Example: 1, 5, 17" />
+            <small>Nếu nhập USE Index thì app sẽ output USE=index, question code.</small>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="baseType">Base Type</label>
+          <select id="baseType">
+            <option value="total_sample">Base / Total Sample</option>
+            <option value="asked_base">Asked Base</option>
+          </select>
+        </div>
+
+        <div id="askedBaseBox" class="form-group hidden">
+          <label for="askedBaseText">Asked Base Text</label>
+          <input id="askedBaseText" type="text" placeholder="Example: SAMPLE A,SAMPLE B" />
+          <small>Nếu generate nhiều table, có thể nhập nhiều base cách nhau bằng dấu phẩy.</small>
+        </div>
+
+        <!-- Summary setup nằm trong Input section -->
+        <div id="summarySetupPanel" class="summary-box hidden">
+          <h3>Summary Table Setup</h3>
+
+          <div id="summarySetupBox">
+            <div class="form-group">
+              <label for="summaryRawInput">CUSTOM CODE</label>
+              <textarea id="summaryRawInput" class="summary-raw" placeholder="Paste client summary instruction here..."></textarea>
+            </div>
+
+            <div class="summary-control-row">
+              <div class="form-group">
+                <label for="summaryBlockCount">Number of Summary Blocks</label>
+                <input id="summaryBlockCount" type="number" min="1" placeholder="Example: 3" />
+              </div>
+
+              <button id="buildSummarySetupBtn" type="button">Build Summary Setup</button>
+            </div>
+
+            <div class="summary-preview-actions">
+              <button id="openSummaryModalBtn" type="button" class="secondary hidden">
+                Open Summary Setup
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div id="rankingSetupPanel" class="summary-box hidden">
+  <h3>Ranking Table Setup</h3>
+
+  <div class="form-group">
+    <label for="rankingMetricDefinitions">Metric Definitions</label>
+    <textarea id="rankingMetricDefinitions" class="summary-raw" placeholder="% Extremely Important (:1)
+% Extremely/Very Important (:1-2)
+% Total Important (:1-3)"></textarea>
+    <small>Mỗi metric sẽ tạo ra một table riêng.</small>
+  </div>
+
+  <div class="checkbox-row">
+    <input id="useSplitAB" type="checkbox" />
+    <label for="useSplitAB">Add SplitAB rows</label>
+  </div>
+
+  <div id="splitABBox" class="form-group hidden">
+    <label>SplitAB Setup</label>
+
+    <div class="mini-grid">
+      <input id="splitVariable" type="text" value="SplitAB" placeholder="Split variable" />
+      <input id="splitACode" type="text" value="1" placeholder="A code" />
+      <input id="splitBCode" type="text" value="2" placeholder="B code" />
+      <input id="splitOptions" type="text" value="HR,SX" placeholder="Options" />
+    </div>
+
+    <small>Output mặc định: A^ SplitAB (1) ^HR,SX và B^ SplitAB (2) ^HR,SX.</small>
+  </div>
+
+  <div class="form-group">
+    <label for="rankingItemsInput">Ranking Items</label>
+    <textarea id="rankingItemsInput" class="summary-raw" placeholder="6 IMPROVING STREETS
+7 INCREASING SAFETY FOR DRIVERS
+8 INCREASING SAFETY FOR DRIVERS & PEDS"></textarea>
+    <small>Có thể paste dạng: 7 | INCREASING SAFETY FOR DRIVERS | 1</small>
+  </div>
+
+  <div class="summary-preview-actions">
+    <button id="buildRankingSplitBtn" type="button" class="secondary hidden">
+      Build Split Code Setup
+    </button>
+  </div>
+</div>
+
+        <div class="button-row">
+          <button id="addBtn">Add Table</button>
+          <button id="cancelEditBtn" class="secondary hidden">Cancel Edit</button>
+          <button id="clearInputBtn" class="secondary">Clear Input</button>
+        </div>
+      </section>
+
+      <section class="card output-card">
+        <div class="section-title">
+          <h2>Output Syntax</h2>
+
+          <div class="button-row no-margin">
+            <button id="generateBtn">Refresh Output</button>
+            <button id="copyBtn">Copy All</button>
+          </div>
+        </div>
+
+        <pre id="output"></pre>
+      </section>
+
+      <section class="card full">
+        <div class="section-title">
+          <h2>Input List</h2>
+          <button id="clearAllBtn" class="danger">Clear All</button>
+        </div>
+
+        <div id="inputList" class="input-list"></div>
+      </section>
+
+    </main>
+
+  </div>
+
+  <!-- Popup/modal để edit Summary Blocks -->
+  <div id="summaryModal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2>Summary Block Setup</h2>
+        <button id="closeSummaryModalBtn" type="button" class="modal-close">×</button>
+      </div>
+
+      <div class="modal-body">
+        <div id="summaryBlockSetupContainer" class="summary-block-container"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="saveSummaryModalBtn" type="button">Save & Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="rankingSplitModal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2>Ranking Split Code Setup</h2>
+      <button id="closeRankingSplitModalBtn" type="button" class="modal-close">×</button>
+    </div>
+
+    <div class="modal-body">
+      <p class="modal-help">
+        Chọn suffix cuối dòng cho từng item. Blank = không thêm, 1 = ^1, 2 = ^2.
+      </p>
+
+      <div id="rankingSplitTableContainer"></div>
+    </div>
+
+    <div class="modal-footer">
+      <button id="saveRankingSplitModalBtn" type="button">Save & Close</button>
+    </div>
+  </div>
+</div>
+
+  <script src="assets/js/main.js"></script>
+</body>
+</html>
