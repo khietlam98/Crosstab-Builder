@@ -5,13 +5,18 @@ const projectSettings = {
       single_choice: "OR,OV,OI2,O%,F%,BH,RV,S2,P0,V2,SA,SP",
       summary_table: "OR,OV,OI2,O%,F%,BH,RV,S2,P0,V2,SA,SP",
       array: "OR,OV,OI2,O%,F%,BH,RV,S2,P0,V2,SA,SP,ST",
-      ranking_table: "OR,OV,OB,OD,O%,F%,R%,RA,BH,RV,S2,P0,V2,SA,SP"
+      ranking_table: "OR,OV,OB,OD,O%,F%,R%,RA,BH,RV,S2,P0,V2,SA,SP",
+      demographic: "OR,OV,OI2,O%,F%,BH,RV,S2,P0,V2,SA,SP",
+      listout_table: "OR,OV,O%,F%,BH,RV,S2,P0,V2,SA,SP",
     },
     baseTnByType: {
       single_choice: "1",
       array: "1",
       summary_table: "0",
-        ranking_table: "0"
+        ranking_table: "0",
+        demographic: "1",
+        multiple_choice: "1",
+        listout_table: "1",
     }
   },
 
@@ -161,6 +166,129 @@ const rowTemplates = {
   ]
 };
 
+const demographicTemplates = {
+  age: [
+    " 18-34^       {VAR} (1-2)  ^",
+    " 35-44^       {VAR} (3)    ^",
+    " 45-54^       {VAR} (4)    ^",
+    " 55-64^       {VAR} (5)    ^",
+    " 65+^         {VAR} (6)    ^",
+    " REFUSED^     {VAR} (7)    ^",
+    " ^                       ^",
+    " 18-54^       {VAR} (1-4)  ^",
+    " 55+^         {VAR} (5-6)  ^"
+  ],
+
+  gender: [
+    " **D/S (MALE - FEMALE)^  CALC F2-F3,V2-V3               ^SX",
+    " MALE^                          {VAR} (1) ^",
+    " FEMALE^                        {VAR} (2) ^",
+    " NON-BINARY OR SOMETHING ELSE^  {VAR} (3) ^",
+    " REFUSED^                       {VAR} (4) ^",
+    " ^ ^",
+    " MEN 18-54^     D1B (1-4) & {VAR} (1)",
+    " MEN 55+^       D1B (5-6) & {VAR} (1)",
+    " WOMEN 18-54^   D1B (1-4) & {VAR} (2)",
+    " WOMEN 55+^     D1B (5-6) & {VAR} (2)"
+  ],
+
+  length_residence: [
+    " LESS THAN 1 YEARS^          {VAR} (1)^",
+    " 1 - 5 YEARS^                {VAR} (2)^",
+    " 6 - 10 YEARS^               {VAR} (3)^",
+    " 11 - 19 YEARS^              {VAR} (4)^",
+    " 20 - 29 YEARS^              {VAR} (5)^",
+    " 30 - 39 YEARS^              {VAR} (6)^",
+    " 40 OR MORE YEARS/NATIVE^    {VAR} (7)^",
+    " UNSURE/REFUSED^             {VAR} (8)^",
+    " ^                       ^",
+    " TOTAL 0-5 YEARS^            {VAR} (1-2)^",
+    " TOTAL 0-10 YEARS^           {VAR} (1-3)^",
+    " TOTAL 0-19 YEARS^           {VAR} (1-4)^",
+    " TOTAL 20+ YEARS/NATIVE^     {VAR} (5-7)^"
+  ],
+
+  education: [
+    " **D/S (TOT <COLL - TOT COLL+)^  CALC F10-F11,V10-V11              ^SX",
+    " ATTENDED/GRADUATED HIGH SCHOOL^        {VAR} (1)^",
+    " TECHNICAL OR VOCATIONAL SCHOOL DEGREE^ {VAR} (2)^",
+    " SOME COLLEGE/ASSOCIATES DEGREE^        {VAR} (3)^",
+    " GRADUATED COLLEGE^                     {VAR} (4)^",
+    " GRADUATE/PROFESSIONAL SCHOOL DEGREE^   {VAR} (5)^",
+    " UNSURE/REFUSED^                        {VAR} (6)^",
+    " ^                       ^",
+    " TOTAL SOME COLL^             {VAR} (2-3)^",
+    " TOTAL LESS THAN COLL^        {VAR} (1-3) ^",
+    " TOTAL COLL GRAD+^            {VAR} (4-5)^"
+  ],
+
+  party: [
+    " **D/S (GOP - DEM)^  CALC F2-F3,V2-V3               ^SX",
+    " REPUBLICAN^                    {VAR} (1)^",
+    " DEMOCRAT^                      {VAR} (2)^",
+    " SOMETHING ELSE/INDEPENDENT^    {VAR} (3)^",
+    " REFUSED^                       {VAR} (4)^",
+    " ^ ^",
+    " GOP MEN^       {VAR}(1) & D2(1)",
+    " GOP WOMEN^     {VAR}(1) & D2(2)",
+    " IND MEN^       {VAR}(3) & D2(1)",
+    " IND WOMEN^     {VAR}(3) & D2(2)",
+    " DEM MEN^       {VAR}(2) & D2(1)",
+    " DEM WOMEN^     {VAR}(2) & D2(2)",
+    " ^ ^",
+    " GOP 18-54^     {VAR}(1) & D1B(1-4)",
+    " GOP 55+^       {VAR}(1) & D1B(5-6)",
+    " IND 18-54^     {VAR}(3) & D1B(1-4)",
+    " IND 55+^       {VAR}(3) & D1B(5-6)",
+    " DEM 18-54^     {VAR}(2) & D1B(1-4)",
+    " DEM 55+^       {VAR}(2) & D1B(5-6)"
+  ],
+
+  ethnicity: [
+    " **D/S (TOT WHITE - TOT VOC)^        CALC F2-F3,V2-V3       ^SX",
+    " WHITE^                              {VAR}              (1)    ^",
+    " TOTAL VOTERS OF COLOR^              {VAR}              (2-7)  ^L-,SX",
+    "  HISPANIC OR LATINO^                {VAR}              (2)    ^",
+    "  AFRICAN AMERICAN OR BLACK^         {VAR}              (3)    ^",
+    "  ASIAN AMERICAN^                    {VAR}              (4)    ^",
+    "  MIDDLE EASTERN^                    {VAR}              (5)    ^",
+    "  NATIVE AMERICAN^                   {VAR}              (6)    ^",
+    "  OTHER OR A COMBINATION (SPECIFY)^  {VAR}              (7)    ^"
+  ],
+
+  homeowner: [
+    " **D/S (OWN - RENT)^  CALC F2-F3,V2-V3               ^SX",
+    " OWN^                       {VAR} (1)^",
+    " RENT^                      {VAR} (2)^",
+    " SOMETHING ELSE^            {VAR} (3)^",
+    " REFUSED^                   {VAR} (4)^"
+  ],
+
+  children: [
+    " **D/S (YES - NO)^  CALC F2-F3,V2-V3               ^SX",
+    " PARENT^    {{VAR}_1 (1) or {VAR}_2 (1) or {VAR}_3 (1)}^L-,SX",
+    " BALANCE^   {{VAR}_4(1) OR {VAR}_5(1) OR {VAR}_6(1) and {not {{VAR}_1 (1) or {VAR}_2 (1) or {VAR}_3 (1)}}}^L-,SX",
+    "   NOT YET IN KINDERGARTEN^          {VAR}_1 (1)",
+    "   KINDERGARTEN THROUGH SIXTH GRADE^ {VAR}_2 (1)",
+    "   MIDDLE OR HIGH SCHOOL^            {VAR}_3 (1)",
+    " GRADUATED^                          {VAR}_4 (1)",
+    " NONE OF THESE^                      {VAR}_5 (1)",
+    " DON T HAVE CHILDREN^                {VAR}_6 (1)",
+    " REFUSED^                            {VAR}_7 (1)"
+  ],
+
+  financial_situation: [
+    " **D/S (TOT COMFORTABLY - TOT STRUGGLING)^  CALC F2-F3,V2-V3               ^SX",
+    " TOTAL COMFORTABLY^                                 {VAR} (1-2)^L-,SX",
+    " TOTAL GETTING/STRUGGLING^                          {VAR} (3-4)^L-,SX",
+    "   LIVING COMFORTABLY WITH INCREASING SAVINGS^      {VAR} (1)",
+    "   LIVING COMFORTABLY BUT NOT INCREASING SAVINGS^   {VAR} (2)",
+    "   JUST GETTING BY FINANCIALLY^                     {VAR} (3)",
+    "   REALLY STRUGGLING FINANCIALLY^                   {VAR} (4)",
+    " PREFER NOT TO ANSWER^                              {VAR} (5)"
+  ]
+};
+
 let tables = [];
 let editingIndex = null;
 
@@ -174,16 +302,39 @@ const questionTextInput = document.getElementById("questionText");
 const answerOptionsInput = document.getElementById("answerOptions");
 const answerOptionsBox = document.getElementById("answerOptionsBox");
 
+const useCustomNetGroupsCheckbox = document.getElementById("useCustomNetGroups");
+const customNetGroupBox = document.getElementById("customNetGroupBox");
+const customNetGroupsInput = document.getElementById("customNetGroups");
+const buildCustomDSBtn = document.getElementById("buildCustomDSBtn");
+const customDSBox = document.getElementById("customDSBox");
+const customDSPositiveSelect = document.getElementById("customDSPositive");
+const customDSNegativeSelect = document.getElementById("customDSNegative");
+
+const demographicSetupPanel = document.getElementById("demographicSetupPanel");
+const demographicAdditionalCodesInput = document.getElementById("demographicAdditionalCodes");
+
 const normalOptionsBox = document.getElementById("normalOptionsBox");
 const useSTCheckbox = document.getElementById("useST");
 const useDSCheckbox = document.getElementById("useDS");
+const useDSBox = document.getElementById("useDSBox");
 const subtitleBox = document.getElementById("subtitleBox");
 const subtitleOnlyInput = document.getElementById("subtitleOnly");
 const manualUseIndexInput = document.getElementById("manualUseIndex");
 
 const baseTypeSelect = document.getElementById("baseType");
 const askedBaseBox = document.getElementById("askedBaseBox");
+const askedBaseTextBox = document.getElementById("askedBaseTextBox");
 const askedBaseTextInput = document.getElementById("askedBaseText");
+
+const arraySampleSetupBox = document.getElementById("arraySampleSetupBox");
+const useArraySampleSetupCheckbox = document.getElementById("useArraySampleSetup");
+const arraySampleExtraRowsInput = document.getElementById("arraySampleExtraRows");
+const buildArraySampleBtn = document.getElementById("buildArraySampleBtn");
+
+const arraySampleModal = document.getElementById("arraySampleModal");
+const closeArraySampleModalBtn = document.getElementById("closeArraySampleModalBtn");
+const saveArraySampleModalBtn = document.getElementById("saveArraySampleModalBtn");
+const arraySampleTableContainer = document.getElementById("arraySampleTableContainer");
 
 const summarySetupBox = document.getElementById("summarySetupBox");
 const summaryRawInput = document.getElementById("summaryRawInput");
@@ -207,6 +358,29 @@ const splitACodeInput = document.getElementById("splitACode");
 const splitBCodeInput = document.getElementById("splitBCode");
 const splitOptionsInput = document.getElementById("splitOptions");
 
+const listoutSetupPanel = document.getElementById("listoutSetupPanel");
+const listoutManualSectionsInput = document.getElementById("listoutManualSections");
+
+const includeVersionSectionCheckbox = document.getElementById("includeVersionSection");
+const versionExtraRowsInput = document.getElementById("versionExtraRows");
+
+const includeModeSectionCheckbox = document.getElementById("includeModeSection");
+const modeExtraRowsInput = document.getElementById("modeExtraRows");
+
+const includeDateSectionCheckbox = document.getElementById("includeDateSection");
+const dateVariableInput = document.getElementById("dateVariable");
+const startDateInput = document.getElementById("startDateInput");
+const endDateInput = document.getElementById("endDateInput");
+
+const toggleVersionExtraBtn = document.getElementById("toggleVersionExtraBtn");
+const versionExtraBox = document.getElementById("versionExtraBox");
+
+const toggleModeExtraBtn = document.getElementById("toggleModeExtraBtn");
+const modeExtraBox = document.getElementById("modeExtraBox");
+
+const toggleDateSetupBtn = document.getElementById("toggleDateSetupBtn");
+const dateSetupBox = document.getElementById("dateSetupBox");
+
 const buildRankingSplitBtn = document.getElementById("buildRankingSplitBtn");
 const rankingSplitModal = document.getElementById("rankingSplitModal");
 const closeRankingSplitModalBtn = document.getElementById("closeRankingSplitModalBtn");
@@ -225,6 +399,17 @@ const copyBtn = document.getElementById("copyBtn");
 
 function normalizeQuestionCode(value) {
   return value.trim().toUpperCase();
+}
+
+function getArrayItemLabels(questionCodes) {
+  const subtitleLines = subtitleOnlyInput.value
+    .split("\n")
+    .map(line => line.trim())
+    .filter(line => line !== "");
+
+  return questionCodes.map((code, index) => {
+    return subtitleLines[index] || code;
+  });
 }
 
 function parseRankingMetrics(text) {
@@ -247,6 +432,248 @@ function parseRankingMetrics(text) {
   }).filter(item => item !== null);
 }
 
+const normalRowTypeOptions = [
+  { value: "", text: "Please select a type...", disabled: true },
+  { value: "custom_code", text: "CUSTOM CODE" },
+  { value: "important", text: "TOT IMPORTANT / TOT NOT IMPORTANT" },
+  { value: "good_bad", text: "TOT GOOD / TOT BAD" },
+  { value: "agree_disagree", text: "TOT AGREE / TOT DISAGREE" },
+  { value: "accept_unaccept", text: "TOT ACCEPT / TOT UNACCEPT" },
+  { value: "confident_not_confident", text: "TOT CONFIDENT / TOT NOT CONFIDENT" },
+  { value: "yes_no", text: "TOT YES / TOT NO" },
+  { value: "more_less_likely", text: "TOT MORE LIKELY / TOT LESS LIKELY" },
+  { value: "convincing_not_convincing", text: "TOT CONVINCING / TOT NOT CONVINCING" },
+  { value: "adequate_inadequate", text: "TOT ADEQUATE / TOT INADEQUATE" }
+];
+
+const demographicRowTypeOptions = [
+  { value: "", text: "Please select a demographic type...", disabled: true },
+  { value: "age", text: "AGE" },
+  { value: "gender", text: "GENDER" },
+  { value: "length_residence", text: "LENGTH OF RESIDENCE" },
+  { value: "education", text: "EDUCATION" },
+  { value: "party", text: "PARTY" },
+  { value: "ethnicity", text: "ETHNICITY" },
+  { value: "homeowner", text: "HOMEOWNER" },
+  { value: "children", text: "CHILDREN" },
+  { value: "financial_situation", text: "FINANCIAL SITUATION" },
+  { value: "custom_code", text: "CUSTOM CODE" }
+];
+
+function populateRowTypeOptions(options, selectedValue = "") {
+  rowTypeSelect.innerHTML = "";
+
+  options.forEach(optionData => {
+    const option = document.createElement("option");
+    option.value = optionData.value;
+    option.textContent = optionData.text;
+
+    if (optionData.disabled) {
+      option.disabled = true;
+    }
+
+    if (optionData.value === selectedValue) {
+      option.selected = true;
+    }
+
+    rowTypeSelect.appendChild(option);
+  });
+
+  if (!selectedValue) {
+    rowTypeSelect.value = "";
+  }
+}
+
+function togglePlusSection(button, box, openText, closeText) {
+  const isHidden = box.classList.contains("hidden");
+
+  if (isHidden) {
+    box.classList.remove("hidden");
+    button.textContent = closeText;
+  } else {
+    box.classList.add("hidden");
+    button.textContent = openText;
+  }
+}
+
+function openPlusSection(button, box, closeText) {
+  box.classList.remove("hidden");
+  button.textContent = closeText;
+}
+
+function closePlusSection(button, box, openText) {
+  box.classList.add("hidden");
+  button.textContent = openText;
+}
+
+function toggleUseDSBox() {
+  const isCustomCode = normalizeRowType(rowTypeSelect.value) === "custom_code";
+  const isMultipleChoice = questionTypeSelect.value === "multiple_choice";
+  const isSummaryOrRanking =
+    questionTypeSelect.value === "summary_table" ||
+    questionTypeSelect.value === "ranking_table";
+
+  if (isCustomCode || isMultipleChoice || isSummaryOrRanking) {
+    useDSBox.classList.add("hidden");
+  } else {
+    useDSBox.classList.remove("hidden");
+  }
+}
+
+function toggleUseDSBox() {
+  const isCustomCode = normalizeRowType(rowTypeSelect.value) === "custom_code";
+  const isMultipleChoice = questionTypeSelect.value === "multiple_choice";
+  const isSummaryOrRanking =
+    questionTypeSelect.value === "summary_table" ||
+    questionTypeSelect.value === "ranking_table";
+
+  if (isCustomCode || isMultipleChoice || isSummaryOrRanking) {
+    useDSBox.classList.add("hidden");
+  } else {
+    useDSBox.classList.remove("hidden");
+  }
+}
+
+function toggleCustomNetGroupBox() {
+  if (useCustomNetGroupsCheckbox.checked) {
+    customNetGroupBox.classList.remove("hidden");
+  } else {
+    customNetGroupBox.classList.add("hidden");
+    customDSBox.classList.add("hidden");
+  }
+}
+
+function toggleAnswerOptionsBox() {
+  const isCustomCode = normalizeRowType(rowTypeSelect.value) === "custom_code";
+  const isMultipleChoice = questionTypeSelect.value === "multiple_choice";
+  const isSummaryOrRanking =
+    questionTypeSelect.value === "summary_table" ||
+    questionTypeSelect.value === "ranking_table";
+
+  if ((isCustomCode || isMultipleChoice) && !isSummaryOrRanking) {
+    answerOptionsBox.classList.remove("hidden");
+  } else {
+    answerOptionsBox.classList.add("hidden");
+  }
+}
+
+function convertClientLogicToWincross(logicText) {
+  return String(logicText || "")
+    .replace(/\bAND\b/gi, "&")
+    .replace(/\bOR\b/gi, "or")
+    .replace(/\b([A-Z]+\d+(?:_\d+)?)\s*:\s*([0-9,\-]+)\b/gi, function (_, variable, codes) {
+      return variable.toUpperCase() + "(" + codes + ")";
+    })
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseAdditionalCodes(text) {
+  if (!text.trim()) {
+    return [];
+  }
+
+  return text
+    .split("\n")
+    .map(line => line.trim())
+    .filter(line => line !== "")
+    .map(line => {
+      const parts = line.split(/\t+/);
+
+      let label = "";
+      let logic = "";
+
+      if (parts.length >= 2) {
+        label = parts[0].trim();
+        logic = parts.slice(1).join(" ").trim();
+      } else {
+        const firstLogicIndex = line.search(/\b[A-Z]+\d+(?:_\d+)?\s*:/i);
+
+        if (firstLogicIndex === -1) {
+          return null;
+        }
+
+        label = line.slice(0, firstLogicIndex).trim();
+        logic = line.slice(firstLogicIndex).trim();
+      }
+
+      if (!label || !logic) {
+        return null;
+      }
+
+      return {
+        label,
+        logic: convertClientLogicToWincross(logic)
+      };
+    })
+    .filter(item => item !== null);
+}
+
+function buildAdditionalCodeLines(additionalCodesText) {
+  const items = parseAdditionalCodes(additionalCodesText);
+
+  if (items.length === 0) {
+    return [];
+  }
+
+  const lines = [" ^ ^"];
+
+  items.forEach(item => {
+    lines.push(
+      " " +
+      item.label.padEnd(28) +
+      "^ " +
+      item.logic
+    );
+  });
+
+  return lines;
+}
+
+function buildDemographicTemplateLines(table) {
+  const rowType = normalizeRowType(table.rowType);
+
+  if (rowType === "custom_code") {
+    const lines = [];
+
+    const dsLine = buildCustomDSLine(table);
+
+    if (dsLine) {
+      lines.push(dsLine);
+    }
+
+    buildCustomNetGroupLines(table).forEach(line => lines.push(line));
+
+    buildRowsFromAnswerOptions(
+      table.answerOptions,
+      table.questionCode,
+      table.customNetGroups || []
+    ).forEach(line => lines.push(line));
+
+    buildAdditionalCodeLines(table.demographicAdditionalCodes || "").forEach(line => {
+      lines.push(line);
+    });
+
+    return lines;
+  }
+
+  const template = demographicTemplates[rowType];
+
+  if (!template) {
+    return ["*** ERROR: DEMOGRAPHIC TEMPLATE NOT FOUND - " + table.rowType + " ***"];
+  }
+
+  const lines = template.map(line => {
+    return line.replaceAll("{VAR}", table.questionCode);
+  });
+
+  buildAdditionalCodeLines(table.demographicAdditionalCodes || "").forEach(line => {
+    lines.push(line);
+  });
+
+  return lines;
+}
+
 function parseRankingItems(text) {
   const lines = text
     .split("\n")
@@ -254,17 +681,31 @@ function parseRankingItems(text) {
     .filter(line => line !== "");
 
   return lines.map(line => {
+    // Format có dấu |:
+    // 7 | INCREASING SAFETY FOR DRIVERS | 1
+    // 24. | If we don't take care... | 2
     if (line.includes("|")) {
       const parts = line.split("|").map(part => part.trim());
 
+      const questionNumber = parts[0]
+        .replace(/^Q/i, "")
+        .replace(/[.)]$/, "")
+        .trim();
+
       return {
-        questionCode: "Q" + parts[0].replace(/^Q/i, ""),
+        questionCode: "Q" + questionNumber,
         label: parts[1] || "",
         splitSuffix: parts[2] || ""
       };
     }
 
-    const match = line.match(/^Q?(\d+)\s+(.+)$/i);
+    // Format thường:
+    // 24 If we don't take care...
+    // 24. If we don't take care...
+    // 24) If we don't take care...
+    // Q24 If we don't take care...
+    // Q24. If we don't take care...
+    const match = line.match(/^Q?(\d+)[.)]?\s+(.+)$/i);
 
     if (!match) {
       return null;
@@ -472,6 +913,10 @@ function getQuestionNumber(questionCode) {
 }
 
 function buildQuestionTextLine(table) {
+  if (table.questionType === "listout_table") {
+    return " " + formatListoutTitle(table.questionText);
+  }
+
   if (
     table.questionType === "summary_table" ||
     table.questionType === "ranking_table"
@@ -492,12 +937,362 @@ function getTnValue(questionType, projectType) {
 
 function buildBaseLine(table) {
   const tnValue = getTnValue(table.questionType, table.projectType);
+  const askedBaseText = String(table.askedBaseText || "").trim();
 
   if (table.baseType === "asked_base") {
-    return " BASE=" + table.askedBaseText.trim() + "^TN^" + tnValue;
+    if (!askedBaseText) {
+      return " BASE=TOTAL SAMPLE^TN^" + tnValue;
+    }
+
+    return " BASE=" + askedBaseText + "^TN^" + tnValue;
   }
 
   return " BASE=TOTAL SAMPLE^TN^" + tnValue;
+}
+
+function formatYYYYMMDD(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return "" + year + month + day;
+}
+
+function normalizeListoutSectionTitle(title) {
+  return String(title || "").trim().toUpperCase();
+}
+
+function defaultVariableForListoutSection(title) {
+  const cleanTitle = normalizeListoutSectionTitle(title);
+
+  const map = {
+    REGION: "REGION_CODED",
+    VERSION: "SplitAB",
+    SAMPLE: "SplitAB",
+    MODE: "modetype",
+    DATE: "submitdate"
+  };
+
+  return map[cleanTitle] || cleanTitle.replace(/\s+/g, "_");
+}
+
+function isNumericLabel(label) {
+  return /^[0-9]+$/.test(String(label || "").trim());
+}
+
+function parseListoutManualSections(text) {
+  const rawLines = String(text || "").split("\n");
+  const sections = [];
+  let currentSection = null;
+
+  rawLines.forEach(rawLine => {
+    const trimmedLine = rawLine.replace(/\r/g, "").trim();
+
+    if (!trimmedLine) {
+      return;
+    }
+
+    const parts = trimmedLine.split("|").map(part => part.trim());
+
+    /*
+      Supported header formats:
+      Region
+      Region | REGION_CODED
+    */
+    if (parts.length === 1) {
+      currentSection = {
+        title: normalizeListoutSectionTitle(parts[0]),
+        defaultVariable: defaultVariableForListoutSection(parts[0]),
+        rows: []
+      };
+
+      sections.push(currentSection);
+      return;
+    }
+
+    if (parts.length === 2 && !/^[0-9,\-:]+$/.test(parts[1])) {
+      currentSection = {
+        title: normalizeListoutSectionTitle(parts[0]),
+        defaultVariable: parts[1],
+        rows: []
+      };
+
+      sections.push(currentSection);
+      return;
+    }
+
+    /*
+      Supported row formats:
+      ARCHULETA | 1-8              => use current section variable
+      3065904001 | 1               => use current section variable
+      ARCHULETA | REGION_CODED | 1-8
+      3065904001 | REGION_CODED | 1
+    */
+    if (!currentSection) {
+      currentSection = {
+        title: "SECTION",
+        defaultVariable: "VARIABLE",
+        rows: []
+      };
+
+      sections.push(currentSection);
+    }
+
+    if (parts.length === 2) {
+      currentSection.rows.push({
+        label: parts[0],
+        variable: currentSection.defaultVariable,
+        code: parts[1].replace(":", "-"),
+        isGroup: false
+      });
+
+      return;
+    }
+
+    if (parts.length >= 3) {
+      currentSection.rows.push({
+        label: parts[0],
+        variable: parts[1],
+        code: parts[2].replace(":", "-"),
+        isGroup: false
+      });
+    }
+  });
+
+  // Detect group rows after parsing
+  sections.forEach(section => {
+    section.rows.forEach((row, index) => {
+      const nextRow = section.rows[index + 1];
+
+      const hasRange = row.code.includes("-") || row.code.includes(",");
+      const nextHasSameCode =
+        nextRow &&
+        nextRow.code === row.code &&
+        isNumericLabel(nextRow.label);
+
+      row.isGroup = hasRange || nextHasSameCode;
+    });
+  });
+
+  return sections;
+}
+
+function buildListoutManualSectionLines(text) {
+  const sections = parseListoutManualSections(text);
+  const lines = [];
+
+  sections.forEach(section => {
+    lines.push(" " + section.title + "^    ^L-");
+
+    section.rows.forEach(row => {
+      const indent = row.isGroup ? "   " : "    ";
+      const spaceBeforeParen = row.isGroup ? "" : " ";
+
+      lines.push(
+        indent +
+        row.label.padEnd(18) +
+        "^     " +
+        row.variable +
+        spaceBeforeParen +
+        "(" +
+        row.code +
+        ")"
+      );
+    });
+  });
+
+  return lines;
+}
+
+function parsePipeRows(text) {
+  return String(text || "")
+    .split("\n")
+    .map(line => line.trim())
+    .filter(line => line !== "")
+    .map(line => {
+      const parts = line.split("|").map(part => part.trim());
+
+      return {
+        label: parts[0] || "",
+        variable: parts[1] || "",
+        code: parts[2] || ""
+      };
+    })
+    .filter(row => row.label && row.variable && row.code);
+}
+
+function buildListoutVersionLines(extraRowsText) {
+  const lines = [
+    " VERSION^     ^L-",
+    "   SAMPLE A^           SplitAB (1)",
+    "   SAMPLE B^           SplitAB (2)"
+  ];
+
+  const extraRows = parsePipeRows(extraRowsText);
+
+  extraRows.forEach(row => {
+    lines.push(
+      "   " +
+      row.label.padEnd(18) +
+      "^     " +
+      row.variable +
+      " (" +
+      row.code +
+      ")"
+    );
+  });
+
+  return lines;
+}
+
+function buildListoutModeLines(extraRowsText) {
+  const lines = [
+    " MODE^        ^L-",
+    "   LANDLINE^          modetype (1)",
+    "   CELL^              modetype (2)",
+    "   TEXT^              modetype (3)",
+    "   EMAIL^             modetype (4)"
+  ];
+
+  const extraRows = parsePipeRows(extraRowsText);
+
+  extraRows.forEach(row => {
+    lines.push(
+      "   " +
+      row.label.padEnd(18) +
+      "^     " +
+      row.variable +
+      " (" +
+      row.code +
+      ")"
+    );
+  });
+
+  return lines;
+}
+
+function parseYYYYMMDD(value) {
+  const clean = String(value || "").trim();
+
+  if (!/^\d{8}$/.test(clean)) {
+    return null;
+  }
+
+  const year = Number(clean.slice(0, 4));
+  const month = Number(clean.slice(4, 6)) - 1;
+  const day = Number(clean.slice(6, 8));
+
+  const date = new Date(year, month, day);
+
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return date;
+}
+
+function formatYYYYMMDD(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return "" + year + month + day;
+}
+
+function formatListoutDateLabel(date) {
+  const weekdays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+  const months = [
+    "JANUARY",
+    "FEBRUARY",
+    "MARCH",
+    "APRIL",
+    "MAY",
+    "JUNE",
+    "JULY",
+    "AUGUST",
+    "SEPTEMBER",
+    "OCTOBER",
+    "NOVEMBER",
+    "DECEMBER"
+  ];
+
+  return weekdays[date.getDay()] + ", " + months[date.getMonth()] + " " + date.getDate();
+}
+
+function buildListoutDateLines(dateVariable, startDateText, endDateText) {
+  const startDate = parseYYYYMMDD(startDateText);
+  const endDate = parseYYYYMMDD(endDateText);
+
+  if (!startDate || !endDate) {
+    return [];
+  }
+
+  if (endDate < startDate) {
+    return [
+      " DATE^        ^L-",
+      " *** ERROR: END DATE MUST BE AFTER START DATE ***"
+    ];
+  }
+
+  const variable = dateVariable || "submitdate";
+  const lines = [" DATE^        ^L-"];
+
+  const current = new Date(startDate);
+
+  while (current <= endDate) {
+    const code = formatYYYYMMDD(current);
+    const label = formatListoutDateLabel(current);
+
+    lines.push(
+      "   " +
+      label.padEnd(20) +
+      "^     " +
+      variable +
+      " (" +
+      code +
+      ")"
+    );
+
+    current.setDate(current.getDate() + 1);
+  }
+
+  return lines;
+}
+
+function buildListoutTableLines(table) {
+  const lines = [];
+
+  buildListoutManualSectionLines(table.listoutManualSections || "").forEach(line => {
+    lines.push(line);
+  });
+
+  if (table.includeVersionSection) {
+    buildListoutVersionLines(table.versionExtraRows || "").forEach(line => {
+      lines.push(line);
+    });
+  }
+
+  if (table.includeModeSection) {
+    buildListoutModeLines(table.modeExtraRows || "").forEach(line => {
+      lines.push(line);
+    });
+  }
+
+  if (table.includeDateSection) {
+    buildListoutDateLines(
+      table.dateVariable || "submitdate",
+      table.startDate || "",
+      table.endDate || ""
+    ).forEach(line => {
+      lines.push(line);
+    });
+  }
+
+  return lines;
 }
 
 function buildRowTemplateLines(table) {
@@ -523,13 +1318,14 @@ function buildRowTemplateLines(table) {
 }
 
 function cleanAnswerLabel(label) {
-  return label
+  return String(label || "")
     .replace(/\s*\(DO NOT READ\)/gi, "")
     .replace(/\s*\(DNR\)/gi, "")
-    .trim();
+    .trim()
+    .toUpperCase();
 }
 
-function buildRowsFromAnswerOptions(answerOptionsText, questionCode) {
+function buildRowsFromAnswerOptions(answerOptionsText, questionCode, netGroups = []) {
   if (!answerOptionsText) {
     return [];
   }
@@ -549,8 +1345,257 @@ function buildRowsFromAnswerOptions(answerOptionsText, questionCode) {
     const code = match[1];
     const label = cleanAnswerLabel(match[2]);
 
-    return " " + label.padEnd(28) + "^ " + questionCode.padEnd(18) + "(" + code + ") ^";
+    const shouldIndent = isAnswerCodeInsideNetGroups(code, netGroups);
+
+    const indent = shouldIndent ? "   " : " ";
+
+    return (
+      indent +
+      label.padEnd(30) +
+      "^ " +
+      questionCode +
+      " (" +
+      code +
+      ") ^"
+    );
   });
+}
+
+function parseAnswerOptions(answerOptionsText) {
+  if (!answerOptionsText) {
+    return [];
+  }
+
+  return answerOptionsText
+    .split("\n")
+    .map(line => line.trim())
+    .filter(line => line !== "")
+    .map(line => {
+      const match = line.match(/^(\d+)\s+(.+)$/);
+
+      if (!match) {
+        return null;
+      }
+
+      return {
+        code: match[1],
+        label: cleanAnswerLabel(match[2])
+      };
+    })
+    .filter(item => item !== null);
+}
+
+function normalizeCustomCodeRange(value) {
+  return String(value || "")
+    .trim()
+    .replace(/:/g, "-");
+}
+
+function parseCustomNetGroups(text) {
+  if (!text.trim()) {
+    return [];
+  }
+
+  return text
+    .split("\n")
+    .map(line => line.trim())
+    .filter(line => line !== "")
+    .map(line => {
+      /*
+        New format giống Answer Options:
+        1-2 TOTAL YES
+        3-4 TOTAL NO
+        1:2 TOTAL YES
+        3:4 TOTAL NO
+
+        Still support old format:
+        TOTAL YES | 1-2
+        TOTAL NO | 3-4
+      */
+
+      if (line.includes("|")) {
+        const parts = line.split("|").map(part => part.trim());
+
+        if (parts.length < 2) {
+          return null;
+        }
+
+        return {
+        label: String(parts[0] || "").trim().toUpperCase(),
+        range: normalizeCustomCodeRange(parts[1]),
+        options: "L-,SX"
+      };
+      }
+
+      const match = line.match(/^([0-9]+(?:[-:,][0-9]+)*)\s+(.+)$/);
+
+      if (!match) {
+        return null;
+      }
+
+      return {
+        range: normalizeCustomCodeRange(match[1]),
+        label: match[2].trim().toUpperCase(),
+        options: "L-,SX"
+      };
+    })
+    .filter(item => item !== null && item.label !== "" && item.range !== "");
+}
+
+function expandCodeRange(rangeText) {
+  const cleanRange = String(rangeText || "")
+    .trim()
+    .replace(":", "-");
+
+  if (!cleanRange) {
+    return [];
+  }
+
+  if (!cleanRange.includes("-")) {
+    return [cleanRange];
+  }
+
+  const parts = cleanRange.split("-");
+  const start = parseInt(parts[0], 10);
+  const end = parseInt(parts[1], 10);
+
+  if (Number.isNaN(start) || Number.isNaN(end)) {
+    return [];
+  }
+
+  const codes = [];
+
+  for (let i = start; i <= end; i++) {
+    codes.push(String(i));
+  }
+
+  return codes;
+}
+
+function isAnswerCodeInsideNetGroups(answerCode, netGroups) {
+  return netGroups.some(group => {
+    const codes = expandCodeRange(group.range);
+    return codes.includes(String(answerCode));
+  });
+}
+
+function buildCustomDSSetup() {
+  const netGroups = useCustomNetGroupsCheckbox.checked
+    ? parseCustomNetGroups(customNetGroupsInput.value)
+    : [];
+
+  const answerOptions = parseAnswerOptions(answerOptionsInput.value);
+
+  const dsChoices = [
+    ...netGroups.map((group, index) => {
+      return {
+        type: "net",
+        label: group.label,
+        rowNumber: index + 2
+      };
+    }),
+
+    ...answerOptions.map((option, index) => {
+      return {
+        type: "answer",
+        label: option.label,
+        rowNumber: netGroups.length + index + 2
+      };
+    })
+  ];
+
+  if (dsChoices.length === 0) {
+    alert("Please enter Total / Net Groups or Answer Options first.");
+    return;
+  }
+
+  customDSPositiveSelect.innerHTML = "";
+  customDSNegativeSelect.innerHTML = "";
+
+  dsChoices.forEach(choice => {
+    const value = choice.type + "|" + choice.label + "|" + choice.rowNumber;
+
+    const positiveOption = document.createElement("option");
+    positiveOption.value = value;
+    positiveOption.textContent = choice.label;
+
+    const negativeOption = document.createElement("option");
+    negativeOption.value = value;
+    negativeOption.textContent = choice.label;
+
+    customDSPositiveSelect.appendChild(positiveOption);
+    customDSNegativeSelect.appendChild(negativeOption);
+  });
+
+  if (dsChoices.length >= 2) {
+    customDSPositiveSelect.value =
+      dsChoices[0].type + "|" + dsChoices[0].label + "|" + dsChoices[0].rowNumber;
+
+    customDSNegativeSelect.value =
+      dsChoices[dsChoices.length - 1].type +
+      "|" +
+      dsChoices[dsChoices.length - 1].label +
+      "|" +
+      dsChoices[dsChoices.length - 1].rowNumber;
+  }
+
+  customDSBox.classList.remove("hidden");
+}
+
+function buildCustomNetGroupLines(table) {
+  const netGroups = table.customNetGroups || [];
+
+  return netGroups.map(group => {
+    return (
+      " " +
+      group.label.padEnd(30) +
+      "^ " +
+      table.questionCode +
+      " (" +
+      group.range +
+      ") ^" +
+      group.options
+    );
+  });
+}
+
+function parseCustomDSValue(value) {
+  const parts = String(value || "").split("|");
+
+  return {
+    type: parts[0] || "",
+    label: parts[1] || "",
+    rowNumber: Number(parts[2] || 0)
+  };
+}
+
+function buildCustomDSLine(table) {
+  if (!table.customDSPositive || !table.customDSNegative) {
+    return "";
+  }
+
+  const positive = parseCustomDSValue(table.customDSPositive);
+  const negative = parseCustomDSValue(table.customDSNegative);
+
+  if (!positive.rowNumber || !negative.rowNumber) {
+    return "";
+  }
+
+  return (
+    " **D/S (" +
+    positive.label +
+    " - " +
+    negative.label +
+    ")^ CALC F" +
+    positive.rowNumber +
+    "-F" +
+    negative.rowNumber +
+    ",V" +
+    positive.rowNumber +
+    "-V" +
+    negative.rowNumber +
+    "^SX"
+  );
 }
 
 function normalizeSummaryTitle(title) {
@@ -579,22 +1624,11 @@ function parseSummaryRawText(rawText) {
   let currentBlock = null;
 
   lines.forEach(line => {
-    const blockMatch = line.match(/^(Q\d+(?:\/\d+)*)\s+(.+)$/i);
+    const block = parseSummaryBlockHeader(line);
 
-    if (blockMatch && !line.includes(":")) {
-      currentBlock = {
-        sourceCode: blockMatch[1].trim().toUpperCase(),
-        title: normalizeSummaryTitle(blockMatch[2]),
-        rows: []
-      };
-
+    if (block) {
+      currentBlock = block;
       blocks.push(currentBlock);
-      return;
-    }
-
-    const logicIndex = line.search(/Q\d+/i);
-
-    if (logicIndex === -1) {
       return;
     }
 
@@ -602,27 +1636,232 @@ function parseSummaryRawText(rawText) {
       currentBlock = {
         sourceCode: "",
         title: "SUMMARY BLOCK",
-        rows: []
+        dsPositiveCode: "",
+        dsNegativeCode: "",
+        rows: [],
+        warnings: []
       };
 
       blocks.push(currentBlock);
     }
 
-    const label = normalizeSummaryLabel(line.slice(0, logicIndex));
-    const logic = line.slice(logicIndex).trim();
+    const row = parseSummaryRowLine(line, currentBlock.sourceCode);
 
-    currentBlock.rows.push({
-      label,
-      logic
-    });
+    if (row) {
+      currentBlock.rows.push(row);
+    } else {
+      currentBlock.warnings.push(line);
+    }
   });
 
   return blocks;
 }
 
+function parseSummaryBlockHeader(line) {
+  /*
+    Đọc được:
+    Q1/2. COMB INITIAL BALLOT D/S (:1-2 MINUS 6-7)
+    Q34/35. FINAL BALLOT D/S (:1-2 MINUS 6-7)
+    Q1/2 COMB INITIAL BALLOT D/S
+  */
+  const match = line.match(/^(Q?\d+(?:\/\d+)*)\.?\s+(.+)$/i);
+
+  if (!match) {
+    return null;
+  }
+
+  const rawSource = match[1].replace(/^Q/i, "").trim();
+  let rawTitle = match[2].trim();
+
+  // Nếu phần sau có dạng Q...: thì đây có thể là row logic, không phải block title
+  if (/\bQ?\d+(?:\/\d+)*\s*:/i.test(rawTitle)) {
+    return null;
+  }
+
+  const dsInfo = extractSummaryDSInfo(rawTitle);
+
+  rawTitle = rawTitle
+    .replace(/\s*\(:.*?\)\s*$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return {
+    sourceCode: "Q" + rawSource,
+    title: normalizeSummaryTitle(rawTitle),
+    dsPositiveCode: dsInfo.positiveCode,
+    dsNegativeCode: dsInfo.negativeCode,
+    rows: [],
+    warnings: []
+  };
+}
+
+function extractSummaryDSInfo(title) {
+  const match = String(title || "").match(/\(:\s*([0-9,\-]+)\s*(?:MINUS|-)\s*:?\s*([0-9,\-]+)\s*\)/i);
+
+  if (!match) {
+    return {
+      positiveCode: "",
+      negativeCode: ""
+    };
+  }
+
+  return {
+    positiveCode: match[1].trim(),
+    negativeCode: match[2].trim()
+  };
+}
+
+function parseSummaryBlockHeader(line) {
+  /*
+    Supported:
+    Q1/2. COMB INITIAL BALLOT D/S (:1-2 MINUS 6-7)
+    Q1/2 COMB INITIAL BALLOT D/S
+    Q34/35. FINAL BALLOT D/S (:1-2 MINUS 6-7)
+    Q2/3 INIT BALLOT – COMB D/S
+  */
+
+  const match = line.match(/^(Q?\d+(?:\/\d+)*)\.?\s+(.+)$/i);
+
+  if (!match) {
+    return null;
+  }
+
+  const rawSource = match[1].replace(/^Q/i, "").trim();
+  let rawTitle = match[2].trim();
+
+  // Tránh nhận nhầm row cũ kiểu TOTAL YES Q1/2:1-2 làm block title.
+  if (/\bQ?\d+(?:\/\d+)*\s*:/i.test(rawTitle)) {
+    return null;
+  }
+
+  const dsInfo = extractSummaryDSInfo(rawTitle);
+
+  rawTitle = rawTitle
+    .replace(/\s*\(:.*?\)\s*$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return {
+    sourceCode: "Q" + rawSource,
+    title: normalizeSummaryTitle(rawTitle),
+    dsPositiveCode: dsInfo.positiveCode,
+    dsNegativeCode: dsInfo.negativeCode,
+    rows: [],
+    warnings: []
+  };
+}
+
+function extractSummaryDSInfo(title) {
+  /*
+    Supported:
+    (:1-2 MINUS 6-7)
+    (:1-2 minus :6-7)
+    (:1-2 - 6-7)
+  */
+
+  const cleanTitle = String(title || "").trim();
+
+  const minusMatch = cleanTitle.match(/\(:\s*([0-9,\-]+)\s*(?:MINUS|-)\s*:?\s*([0-9,\-]+)\s*\)/i);
+
+  if (!minusMatch) {
+    return {
+      positiveCode: "",
+      negativeCode: ""
+    };
+  }
+
+  return {
+    positiveCode: minusMatch[1].trim(),
+    negativeCode: minusMatch[2].trim()
+  };
+}
+
+function parseSummaryRowLine(line, sourceCode) {
+  /*
+    Format A:
+    TOTAL YES (:1-2)
+    TOTAL NO (:6-7)
+    LEAN/UND (:3-5)
+  */
+  const inheritMatch = line.match(/^(.+?)\s+\(:\s*([0-9,\-]+)\s*\)\s*$/i);
+
+  if (inheritMatch) {
+    return {
+      label: normalizeSummaryLabel(inheritMatch[1]),
+      logic: sourceCode + ":" + inheritMatch[2].trim()
+    };
+  }
+
+  /*
+    Format B:
+    TOTAL YES Q1/2:1-2
+    TOTAL NO Q34/35:6-7
+  */
+  const oldLogicIndex = line.search(/\bQ?\d+(?:\/\d+)*\s*:/i);
+
+  if (oldLogicIndex !== -1) {
+    return {
+      label: normalizeSummaryLabel(line.slice(0, oldLogicIndex)),
+      logic: normalizeSummaryLogicText(line.slice(oldLogicIndex).trim())
+    };
+  }
+
+  /*
+    Format C:
+    TOTAL YES Q1 (1-2) OR Q2 (1-2)
+    TOTAL NO Q1 (6-7) OR Q2 (6-7)
+  */
+  const parenLogicIndex = line.search(/\bQ\d+\s*\(/i);
+
+  if (parenLogicIndex !== -1) {
+    return {
+      label: normalizeSummaryLabel(line.slice(0, parenLogicIndex)),
+      logic: normalizeSummaryLogicText(line.slice(parenLogicIndex).trim())
+    };
+  }
+
+  /*
+    Format D:
+    MOVE TO YES ((Q1:3-7 OR Q2:3-7) AND (Q34:1-2 OR Q35:1-2))
+  */
+  const doubleParenExpression = line.match(/^(.+?)\s+\(\((.+)\)\)\s*$/i);
+
+  if (doubleParenExpression) {
+    return {
+      label: normalizeSummaryLabel(doubleParenExpression[1]),
+      logic: normalizeSummaryLogicText(doubleParenExpression[2].trim())
+    };
+  }
+
+  /*
+    Format E:
+    MOVE TO YES (Q1:3-7 OR Q2:3-7)
+  */
+  const singleExpression = line.match(/^(.+?)\s+\((Q\d+:.+)\)\s*$/i);
+
+  if (singleExpression) {
+    return {
+      label: normalizeSummaryLabel(singleExpression[1]),
+      logic: normalizeSummaryLogicText(singleExpression[2].trim())
+    };
+  }
+
+  return null;
+}
+
+function normalizeSummaryLogicText(logic) {
+  return String(logic || "")
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/\bAND\b/gi, "AND")
+    .replace(/\bOR\b/gi, "OR")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function formatSimpleQGroup(token) {
   const clean = token.trim();
-  const match = clean.match(/^Q([\d\/]+):(.+)$/i);
+  const match = clean.match(/^Q?([\d\/]+)\s*:\s*([0-9,\-]+)$/i);
 
   if (!match) {
     return clean;
@@ -642,7 +1881,7 @@ function formatSimpleQGroup(token) {
 
 function formatCompactQGroup(token) {
   const clean = token.trim();
-  const match = clean.match(/^Q([\d\/]+):(.+)$/i);
+  const match = clean.match(/^Q?([\d\/]+)\s*:\s*([0-9,\-]+)$/i);
 
   if (!match) {
     return clean;
@@ -657,29 +1896,98 @@ function formatCompactQGroup(token) {
 }
 
 function formatSummaryLogic(logic) {
-  if (logic.includes("&")) {
-    return logic
-      .split("&")
-      .map(part => {
-        const inner = part.trim();
-        return "{" + formatCompactQGroup(inner) + "}";
-      })
-      .join(" & ");
+  const cleanLogic = String(logic || "").trim();
+
+  if (!cleanLogic) {
+    return "";
   }
 
-  return formatSimpleQGroup(logic);
+  /*
+    Simple:
+    Q1/2:1-2
+    Q34/35:6-7
+  */
+  if (/^Q?\d+(?:\/\d+)*\s*:\s*[0-9,\-]+$/i.test(cleanLogic)) {
+    return formatSimpleQGroup(cleanLogic);
+  }
+
+  /*
+    Already near-WinCross:
+    Q1 (1-2) OR Q2 (1-2)
+  */
+  if (/\bQ\d+\s*\([^)]+\)/i.test(cleanLogic) && !cleanLogic.includes(":")) {
+    return formatAlreadyParenthesizedSummaryLogic(cleanLogic);
+  }
+
+  /*
+    Complex:
+    Q1:3-7 OR Q2:3-7 AND Q34:1-2 OR Q35:1-2
+    (Q1:3-7 OR Q2:3-7) AND (Q34:1-2 OR Q35:1-2)
+  */
+  return formatComplexSummaryExpression(cleanLogic);
+}
+
+function formatAlreadyParenthesizedSummaryLogic(logic) {
+  return String(logic || "")
+    .replace(/\bAND\b/gi, "&")
+    .replace(/\bOR\b/gi, "or")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function formatComplexSummaryExpression(expression) {
+  let text = String(expression || "").trim();
+
+  text = text
+    .replace(/\bAND\b/gi, "&")
+    .replace(/\bOR\b/gi, "or");
+
+  /*
+    Convert parenthesized groups:
+    (Q1:3-7 or Q2:3-7)
+    → {Q1(3-7) or Q2(3-7)}
+  */
+  text = text.replace(/\(([^()]*Q\d+:[^()]*)\)/gi, function (_, groupContent) {
+    return "{" + convertSummaryExpressionTokens(groupContent) + "}";
+  });
+
+  /*
+    Convert remaining Q tokens:
+    Q1:3-7 → Q1(3-7)
+  */
+  text = convertSummaryExpressionTokens(text);
+
+  return text
+    .replace(/\s*&\s*/g, " & ")
+    .replace(/\s+or\s+/gi, " or ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function convertSummaryExpressionTokens(text) {
+  return String(text || "").replace(/\bQ(\d+)\s*:\s*([0-9,\-]+)\b/gi, function (_, qnum, codes) {
+    return "Q" + qnum + "(" + codes + ")";
+  });
 }
 
 function buildSummarySetup() {
   const parsedBlocks = parseSummaryRawText(summaryRawInput.value);
-  const requestedCount = parseInt(summaryBlockCountInput.value, 10) || parsedBlocks.length || 1;
+
+  const typedCount = parseInt(summaryBlockCountInput.value, 10);
+  const requestedCount = Number.isNaN(typedCount)
+    ? parsedBlocks.length || 1
+    : typedCount;
 
   summaryBlockSetupContainer.innerHTML = "";
 
   for (let i = 0; i < requestedCount; i++) {
     const block = parsedBlocks[i] || {
+      sourceCode: "",
       title: "",
-      rows: []
+      dsPositiveCode: "",
+      dsNegativeCode: "",
+      rows: [],
+      warnings: []
     };
 
     const card = document.createElement("div");
@@ -689,9 +1997,6 @@ function buildSummarySetup() {
     const rowOptions = block.rows.map(row => {
       return `<option value="${row.label}">${row.label}</option>`;
     }).join("");
-
-    openSummaryModalBtn.classList.remove("hidden");
-    openSummaryModal();
 
     card.innerHTML = `
       <h4>Summary Block ${i + 1}</h4>
@@ -729,15 +2034,35 @@ function buildSummarySetup() {
     const negativeSelect = card.querySelector(".summary-negative-select");
 
     if (positiveSelect) {
-      const positiveDefault = block.rows.find(row => /TOT\s+YES|TOTAL\s+YES/i.test(row.label));
-      if (positiveDefault) positiveSelect.value = positiveDefault.label;
+      const positiveDefault =
+        block.rows.find(row => {
+          return block.dsPositiveCode && row.logic.includes(":" + block.dsPositiveCode);
+        }) ||
+        block.rows.find(row => /TOT\s+YES|TOTAL\s+YES|YES/i.test(row.label));
+
+      if (positiveDefault) {
+        positiveSelect.value = positiveDefault.label;
+      }
     }
 
     if (negativeSelect) {
-      const negativeDefault = block.rows.find(row => /TOT\s+NO|TOTAL\s+NO/i.test(row.label));
-      if (negativeDefault) negativeSelect.value = negativeDefault.label;
+      const negativeDefault =
+        block.rows.find(row => {
+          return block.dsNegativeCode && row.logic.includes(":" + block.dsNegativeCode);
+        }) ||
+        block.rows.find(row => /TOT\s+NO|TOTAL\s+NO|NO/i.test(row.label));
+
+      if (negativeDefault) {
+        negativeSelect.value = negativeDefault.label;
+      }
     }
   }
+
+  openSummaryModalBtn.classList.remove("hidden");
+  openSummaryModal();
+
+  console.log("Parsed summary blocks:", parsedBlocks);
+  console.log("Requested summary blocks:", requestedCount);
 }
 
 function getSummaryBlocksFromSetup() {
@@ -826,60 +2151,185 @@ function collectTablesFromInput() {
     return null;
   }
 
-  if (baseTypeSelect.value === "asked_base" && !askedBaseTextInput.value.trim()) {
-    alert("Please enter Asked Base Text.");
-    return null;
-  }
+  const isArrayAskedBase =
+  questionTypeSelect.value === "array" &&
+  baseTypeSelect.value === "asked_base";
+
+if (
+  baseTypeSelect.value === "asked_base" &&
+  !isArrayAskedBase &&
+  !askedBaseTextInput.value.trim()
+) {
+  alert("Please enter Asked Base Text.");
+  return null;
+}
 
   if (questionTypeSelect.value === "ranking_table") {
-  const metrics = parseRankingMetrics(rankingMetricDefinitionsInput.value);
+    const metrics = parseRankingMetrics(rankingMetricDefinitionsInput.value);
 
-  if (metrics.length === 0) {
-    alert("Please enter valid Metric Definitions.");
-    return null;
+    if (metrics.length === 0) {
+      alert("Please enter valid Metric Definitions.");
+      return null;
+    }
+
+    const rankingItems = getRankingItemsWithSplitSuffix();
+
+    if (rankingItems.length === 0) {
+      alert("Please paste Ranking Items.");
+      return null;
+    }
+
+    return metrics.map(metric => {
+      return {
+        projectType: projectTypeSelect.value || "N2",
+        questionCode: questionCodes[0],
+        questionType: "ranking_table",
+        rowType: "ranking_table",
+        questionText: buildRankingTitle(questionText, metric.label),
+        useST: false,
+        useDS: false,
+        subtitleOnly: "",
+        baseType: baseTypeSelect.value,
+        askedBaseText: askedBaseTextInput.value.trim(),
+        manualUseIndex: "",
+        answerOptions: "",
+
+        metricLabel: metric.label,
+        metricCode: metric.code,
+        rankingMetricDefinitions: rankingMetricDefinitionsInput.value.trim(),
+        rankingItemsRaw: rankingItemsInput.value.trim(),
+        rankingItems,
+
+        useSplitAB: useSplitABCheckbox.checked,
+        splitVariable: splitVariableInput.value.trim() || "SplitAB",
+        splitACode: splitACodeInput.value.trim() || "1",
+        splitBCode: splitBCodeInput.value.trim() || "2",
+        splitOptions: splitOptionsInput.value.trim() || "HR,SX",
+
+        summaryRaw: "",
+        summaryBlocks: [],
+        arrayGroupId: "",
+        arrayPosition: 0
+      };
+    });
   }
 
-  const rankingItems = getRankingItemsWithSplitSuffix();
+  if (questionTypeSelect.value === "multiple_choice") {
+    const answerOptions = parseAnswerOptions(answerOptionsInput.value);
 
-  if (rankingItems.length === 0) {
-    alert("Please paste Ranking Items.");
-    return null;
+    if (answerOptions.length === 0) {
+      alert("Please enter Answer Options for Multiple Choice.");
+      return null;
+    }
+
+    const useNetGroups = useCustomNetGroupsCheckbox.checked;
+    const customNetGroups = useNetGroups
+      ? parseCustomNetGroups(customNetGroupsInput.value)
+      : [];
+
+    return [{
+      projectType: projectTypeSelect.value || "N2",
+      questionCode: questionCodes[0],
+      questionType: "multiple_choice",
+      rowType: "multiple_choice",
+      questionText,
+      useST: false,
+      useDS: false,
+      subtitleOnly: "",
+      baseType: baseTypeSelect.value,
+      askedBaseText: askedBaseTextInput.value.trim(),
+      manualUseIndex: "",
+      answerOptions: answerOptionsInput.value.trim(),
+
+      useCustomNetGroups: useNetGroups,
+      customNetGroups,
+      customNetGroupsRaw: useNetGroups ? customNetGroupsInput.value.trim() : "",
+      customDSPositive: useNetGroups ? customDSPositiveSelect.value || "" : "",
+      customDSNegative: useNetGroups ? customDSNegativeSelect.value || "" : "",
+
+      summaryRaw: "",
+      summaryBlocks: [],
+      rankingMetricDefinitions: "",
+      rankingItemsRaw: "",
+      rankingItems: [],
+      arrayGroupId: "",
+      arrayPosition: 0
+    }];
   }
 
-  return metrics.map(metric => {
-  return {
+  if (questionTypeSelect.value === "demographic") {
+    if (!rowTypeSelect.value) {
+      alert("Please select Demographic Row Type.");
+      return null;
+    }
+
+    return [{
+      projectType: projectTypeSelect.value || "N2",
+      questionCode: questionCodes[0],
+      questionType: "demographic",
+      rowType: rowTypeSelect.value,
+      questionText,
+      useST: false,
+      useDS: false,
+      subtitleOnly: "",
+      baseType: baseTypeSelect.value,
+      askedBaseText: askedBaseTextInput.value.trim(),
+      manualUseIndex: "",
+      answerOptions: answerOptionsInput.value.trim(),
+
+      customNetGroups: parseCustomNetGroups(customNetGroupsInput.value),
+      customNetGroupsRaw: customNetGroupsInput.value.trim(),
+      customDSPositive: customDSPositiveSelect.value || "",
+      customDSNegative: customDSNegativeSelect.value || "",
+
+      demographicAdditionalCodes: demographicAdditionalCodesInput.value.trim(),
+
+      summaryRaw: "",
+      summaryBlocks: [],
+      rankingMetricDefinitions: "",
+      rankingItemsRaw: "",
+      rankingItems: [],
+      arrayGroupId: "",
+      arrayPosition: 0
+    }];
+  }
+
+  if (questionTypeSelect.value === "listout_table") {
+  return [{
     projectType: projectTypeSelect.value || "N2",
-    questionCode: questionCodes[0],
-    questionType: "ranking_table",
-    rowType: "ranking_table",
-    questionText: buildRankingTitle(questionText, metric.label),
+    questionCode: normalizeQuestionCode(questionCodes[0] || "LISTOUT"),
+    questionType: "listout_table",
+    rowType: "listout_table",
+    questionText,
     useST: false,
     useDS: false,
     subtitleOnly: "",
-    baseType: baseTypeSelect.value,
-    askedBaseText: askedBaseTextInput.value.trim(),
+    baseType: "total_sample",
+    askedBaseText: "",
     manualUseIndex: "",
     answerOptions: "",
 
-    metricLabel: metric.label,
-    metricCode: metric.code,
+    listoutManualSections: listoutManualSectionsInput.value.trim(),
 
-    rankingMetricDefinitions: rankingMetricDefinitionsInput.value.trim(),
-    rankingItemsRaw: rankingItemsInput.value.trim(),
-    rankingItems: rankingItems,
+    includeVersionSection: includeVersionSectionCheckbox.checked,
+    versionExtraRows: versionExtraRowsInput.value.trim(),
 
-    useSplitAB: useSplitABCheckbox.checked,
-    splitVariable: splitVariableInput.value.trim() || "SplitAB",
-    splitACode: splitACodeInput.value.trim() || "1",
-    splitBCode: splitBCodeInput.value.trim() || "2",
-    splitOptions: splitOptionsInput.value.trim() || "HR,SX",
+    includeModeSection: includeModeSectionCheckbox.checked,
+    modeExtraRows: modeExtraRowsInput.value.trim(),
+
+    includeDateSection: includeDateSectionCheckbox.checked,
+    dateVariable: dateVariableInput.value.trim() || "submitdate",
+    startDate: startDateInput.value.trim(),
+    endDate: endDateInput.value.trim(),
 
     summaryRaw: "",
     summaryBlocks: [],
+    rankingMetricDefinitions: "",
+    rankingItemsRaw: "",
+    rankingItems: [],
     arrayGroupId: "",
     arrayPosition: 0
-  };
-});
+  }];
 }
 
   if (questionTypeSelect.value === "summary_table") {
@@ -893,7 +2343,7 @@ function collectTablesFromInput() {
     return [{
       projectType: projectTypeSelect.value || "N2",
       questionCode: questionCodes[0],
-      questionType: questionTypeSelect.value,
+      questionType: "summary_table",
       rowType: "summary_custom",
       questionText,
       useST: false,
@@ -915,21 +2365,26 @@ function collectTablesFromInput() {
     return null;
   }
 
-  const askedBaseItems = askedBaseTextInput.value
-    .split(",")
-    .map(item => item.trim())
-    .filter(item => item !== "");
+const askedBaseItems = askedBaseTextInput.value
+  .split(",")
+  .map(item => item.trim())
+  .filter(item => item !== "");
 
-  if (baseTypeSelect.value === "asked_base" && questionCodes.length > 1) {
-    if (askedBaseItems.length > 1 && askedBaseItems.length !== questionCodes.length) {
-      alert(
-        "Number of Asked Base items must match number of question codes.\n\n" +
-        "Question codes: " + questionCodes.length + "\n" +
-        "Asked Base items: " + askedBaseItems.length
-      );
-      return null;
-    }
+if (
+  baseTypeSelect.value === "asked_base" &&
+  !isArrayAskedBase &&
+  questionCodes.length > 1
+) {
+
+  if (askedBaseItems.length > 1 && askedBaseItems.length !== questionCodes.length) {
+    alert(
+      "Number of Asked Base items must match number of question codes.\n\n" +
+      "Question codes: " + questionCodes.length + "\n" +
+      "Asked Base items: " + askedBaseItems.length
+    );
+    return null;
   }
+}
 
   const subtitleLines = subtitleOnlyInput.value
     .split("\n")
@@ -948,28 +2403,56 @@ function collectTablesFromInput() {
   }
 
   const isArrayRange = questionTypeSelect.value === "array" && questionCodes.length > 1;
-  const arrayGroupId = isArrayRange ? "array_" + Date.now() : "";
+const arrayGroupId = isArrayRange ? "array_" + Date.now() : "";
 
-  return questionCodes.map((code, index) => {
-    return {
-      projectType: projectTypeSelect.value || "N2",
-      questionCode: code,
-      questionType: questionTypeSelect.value,
-      rowType: rowTypeSelect.value,
-      questionText,
-      useST: useSTCheckbox.checked,
-      useDS: useDSCheckbox.checked,
-      subtitleOnly: subtitleLines[index] || subtitleLines[0] || "",
-      baseType: baseTypeSelect.value,
-      askedBaseText: askedBaseItems[index] || askedBaseItems[0] || "",
-      manualUseIndex: manualUseIndexInput.value.trim(),
-      answerOptions: answerOptionsInput.value.trim(),
-      summaryRaw: "",
-      summaryBlocks: [],
-      arrayGroupId,
-      arrayPosition: isArrayRange ? index : 0
-    };
-  });
+const arraySampleSelections =
+  questionTypeSelect.value === "array" &&
+  baseTypeSelect.value === "asked_base" &&
+  useArraySampleSetupCheckbox.checked
+    ? getArraySampleSelections()
+    : [];
+
+return questionCodes.map((code, index) => {
+  return {
+    projectType: projectTypeSelect.value || "N2",
+    questionCode: code,
+    questionType: questionTypeSelect.value,
+    rowType: rowTypeSelect.value,
+    questionText,
+    useST: useSTCheckbox.checked,
+    useDS: useDSCheckbox.checked,
+    subtitleOnly: subtitleLines[index] || subtitleLines[0] || "",
+    baseType: baseTypeSelect.value,
+
+    askedBaseText:
+      arraySampleSelections[index]?.sampleName ||
+      askedBaseItems[index] ||
+      askedBaseItems[0] ||
+      "",
+
+    useArraySampleSetup:
+      questionTypeSelect.value === "array" &&
+      baseTypeSelect.value === "asked_base" &&
+      useArraySampleSetupCheckbox.checked,
+
+    arraySampleExtraRowsRaw: arraySampleExtraRowsInput.value.trim(),
+
+    arraySampleSelections: arraySampleSelections.map(item => item.sampleName || ""),
+
+    manualUseIndex: manualUseIndexInput.value.trim(),
+    answerOptions: answerOptionsInput.value.trim(),
+
+    customNetGroups: parseCustomNetGroups(customNetGroupsInput.value),
+    customNetGroupsRaw: customNetGroupsInput.value.trim(),
+    customDSPositive: customDSPositiveSelect.value || "",
+    customDSNegative: customDSNegativeSelect.value || "",
+
+    summaryRaw: "",
+    summaryBlocks: [],
+    arrayGroupId,
+    arrayPosition: isArrayRange ? index : 0
+  };
+});
 }
 
 function buildRankingTitle(baseTitle, metricLabel) {
@@ -983,13 +2466,54 @@ function buildRankingTitle(baseTitle, metricLabel) {
   return cleanBaseTitle + ": " + cleanMetricLabel;
 }
 
+function formatListoutTitle(title) {
+  const cleanTitle = String(title || "").trim();
+
+  if (!cleanTitle) {
+    return "Region./Sample./Mode./Date.";
+  }
+
+  // Nếu user đã nhập đúng dạng Region./Sample./Mode. thì giữ nguyên
+  if (cleanTitle.includes("./")) {
+    return cleanTitle;
+  }
+
+  // Convert comma-separated title
+  return cleanTitle
+    .split(",")
+    .map(part => part.trim())
+    .filter(part => part !== "")
+    .map(part => part.replace(/\.$/, "") + ".")
+    .join("/");
+}
+
 function addTable() {
+  const oldEditingTable =
+    editingIndex !== null ? tables[editingIndex] : null;
+
   const newTables = collectTablesFromInput();
 
   if (!newTables) return;
 
   if (editingIndex !== null) {
-    tables[editingIndex] = newTables[0];
+    const updatedTable = newTables[0];
+
+    /*
+      Nếu table cũ là một phần của array group,
+      thì table mới sau khi edit phải giữ arrayGroupId và arrayPosition cũ.
+      Như vậy Q2/Q3 vẫn output USE=firstIndex, Q2/Q3 thay vì full rows.
+    */
+    if (
+      oldEditingTable &&
+      oldEditingTable.questionType === "array" &&
+      oldEditingTable.arrayGroupId &&
+      updatedTable.questionType === "array"
+    ) {
+      updatedTable.arrayGroupId = oldEditingTable.arrayGroupId;
+      updatedTable.arrayPosition = oldEditingTable.arrayPosition;
+    }
+
+    tables[editingIndex] = updatedTable;
     exitEditMode();
   } else {
     newTables.forEach(table => tables.push(table));
@@ -1020,9 +2544,23 @@ function editTable(index) {
   projectTypeSelect.value = table.projectType || "N2";
   questionCodeInput.value = table.questionCode;
   questionTypeSelect.value = table.questionType;
-  questionTextInput.value = table.questionText;
+  rowTypeSelect.value = table.rowType || "";
+  questionTextInput.value = table.questionText || "";
+
+  baseTypeSelect.value = table.baseType || "total_sample";
+  askedBaseTextInput.value = table.askedBaseText || "";
+
+  useSTCheckbox.checked = !!table.useST;
+  useDSCheckbox.checked = table.useDS !== false;
+  subtitleOnlyInput.value = table.subtitleOnly || "";
+  manualUseIndexInput.value = table.manualUseIndex || "";
+  answerOptionsInput.value = table.answerOptions || "";
 
   toggleQuestionTypeUI();
+  toggleAskedBaseBox();
+  toggleAnswerOptionsBox();
+  toggleSubtitleBox();
+  toggleUseDSBox();
 
 if (table.questionType === "summary_table") {
   summaryRawInput.value = table.summaryRaw || "";
@@ -1040,6 +2578,131 @@ if (table.questionType === "summary_table") {
     card.querySelector(".summary-negative-select").value = block.negativeLabel || "";
     card.querySelector(".summary-suffix-input").value = block.suffix || "SX,L-";
   });
+
+} else if (table.questionType === "array") {
+  rowTypeSelect.value = table.rowType || "";
+  answerOptionsInput.value = table.answerOptions || "";
+
+  customNetGroupsInput.value = table.customNetGroupsRaw || "";
+  useCustomNetGroupsCheckbox.checked = !!table.customNetGroupsRaw;
+  toggleCustomNetGroupBox();
+
+  if (table.customNetGroupsRaw) {
+    buildCustomDSSetup();
+
+    if (table.customDSPositive) {
+      customDSPositiveSelect.value = table.customDSPositive;
+    }
+
+    if (table.customDSNegative) {
+      customDSNegativeSelect.value = table.customDSNegative;
+    }
+  } else {
+    customDSBox.classList.add("hidden");
+  }
+
+  if (table.baseType === "asked_base") {
+    arraySampleExtraRowsInput.value = table.arraySampleExtraRowsRaw || "";
+    useArraySampleSetupCheckbox.checked = table.useArraySampleSetup !== false;
+
+    toggleAskedBaseBox();
+
+    // Rebuild popup table so old selection can be restored
+    if (table.useArraySampleSetup) {
+      buildArraySampleSetup();
+
+      const selects = [...arraySampleTableContainer.querySelectorAll(".array-sample-select")];
+      const selections = table.arraySampleSelections || [];
+
+      selects.forEach((select, i) => {
+        if (selections[i]) {
+          select.value = selections[i];
+        }
+      });
+
+      // Đừng tự mở popup khi edit nếu không muốn
+      closeArraySampleModal();
+    }
+  }
+
+  toggleAnswerOptionsBox();
+  toggleAskedBaseBox();
+
+  } else if (table.questionType === "demographic") {
+  populateRowTypeOptions(demographicRowTypeOptions, table.rowType);
+  rowTypeSelect.value = table.rowType;
+
+  demographicAdditionalCodesInput.value = table.demographicAdditionalCodes || "";
+
+  answerOptionsInput.value = table.answerOptions || "";
+
+  customNetGroupsInput.value = table.customNetGroupsRaw || "";
+  buildCustomDSSetup();
+
+  if (table.customDSPositive) {
+    customDSPositiveSelect.value = table.customDSPositive;
+  }
+
+  if (table.customDSNegative) {
+    customDSNegativeSelect.value = table.customDSNegative;
+  }
+
+  if (!table.customNetGroupsRaw && !table.answerOptions) {
+    customDSBox.classList.add("hidden");
+  }
+
+} else if (table.questionType === "multiple_choice") {
+  answerOptionsInput.value = table.answerOptions || "";
+
+  useCustomNetGroupsCheckbox.checked = table.useCustomNetGroups || false;
+  toggleCustomNetGroupBox();
+
+  customNetGroupsInput.value = table.customNetGroupsRaw || "";
+  buildCustomDSSetup();
+
+  if (table.customDSPositive) {
+    customDSPositiveSelect.value = table.customDSPositive;
+  }
+
+  if (table.customDSNegative) {
+    customDSNegativeSelect.value = table.customDSNegative;
+  }
+
+  if (!table.useCustomNetGroups) {
+    customDSBox.classList.add("hidden");
+  }
+
+  } else if (table.questionType === "listout_table") {
+  listoutManualSectionsInput.value = table.listoutManualSections || "";
+
+  includeVersionSectionCheckbox.checked = table.includeVersionSection !== false;
+  versionExtraRowsInput.value = table.versionExtraRows || "";
+
+  includeModeSectionCheckbox.checked = table.includeModeSection !== false;
+  modeExtraRowsInput.value = table.modeExtraRows || "";
+
+  includeDateSectionCheckbox.checked = table.includeDateSection !== false;
+  dateVariableInput.value = table.dateVariable || "submitdate";
+  startDateInput.value = table.startDate || "";
+  endDateInput.value = table.endDate || "";
+
+  if (table.versionExtraRows) {
+    openPlusSection(toggleVersionExtraBtn, versionExtraBox, "− Hide VERSION Extra Rows");
+  } else {
+    closePlusSection(toggleVersionExtraBtn, versionExtraBox, "+ Add VERSION Extra Rows");
+  }
+
+  if (table.modeExtraRows) {
+    openPlusSection(toggleModeExtraBtn, modeExtraBox, "− Hide MODE Extra Rows");
+  } else {
+    closePlusSection(toggleModeExtraBtn, modeExtraBox, "+ Add MODE Extra Rows");
+  }
+
+  if (table.startDate || table.endDate) {
+    openPlusSection(toggleDateSetupBtn, dateSetupBox, "− Hide DATE Range");
+  } else {
+    closePlusSection(toggleDateSetupBtn, dateSetupBox, "+ Add DATE Range");
+  }
 
 } else if (table.questionType === "ranking_table") {
   rankingMetricDefinitionsInput.value = table.rankingMetricDefinitions || "";
@@ -1091,6 +2754,22 @@ if (table.questionType === "summary_table") {
 } else {
   rowTypeSelect.value = table.rowType;
   answerOptionsInput.value = table.answerOptions || "";
+  
+  customNetGroupsInput.value = table.customNetGroupsRaw || "";
+  buildCustomDSSetup();
+
+  if (table.customDSPositive) {
+    customDSPositiveSelect.value = table.customDSPositive;
+  }
+
+  if (table.customDSNegative) {
+    customDSNegativeSelect.value = table.customDSNegative;
+  }
+
+  if (!table.customNetGroupsRaw) {
+    customDSBox.classList.add("hidden");
+  }
+
   useSTCheckbox.checked = table.useST;
   useDSCheckbox.checked = table.useDS !== false;
   subtitleOnlyInput.value = table.subtitleOnly || "";
@@ -1205,6 +2884,44 @@ function generateOutput() {
       return;
     }
 
+    if (table.questionType === "listout_table") {
+  const listoutLines = buildListoutTableLines(table);
+  listoutLines.forEach(line => block.push(line));
+  blocks.push(block.join("\n"));
+  return;
+}
+
+    if (table.questionType === "multiple_choice") {
+  const dsLine = buildCustomDSLine(table);
+
+  if (dsLine) {
+    block.push(dsLine);
+  }
+
+  if (table.useCustomNetGroups) {
+    const netGroupLines = buildMultipleChoiceNetGroupLines(table);
+    netGroupLines.forEach(line => block.push(line));
+  }
+
+  const answerRows = buildMultipleChoiceAnswerRows(
+    table.answerOptions,
+    table.questionCode,
+    table.useCustomNetGroups ? table.customNetGroups || [] : []
+  );
+
+  answerRows.forEach(line => block.push(line));
+
+  blocks.push(block.join("\n"));
+  return;
+}
+
+        if (table.questionType === "demographic") {
+    const demographicLines = buildDemographicTemplateLines(table);
+    demographicLines.forEach(line => block.push(line));
+    blocks.push(block.join("\n"));
+    return;
+  }
+
     if (table.useST) {
       if (table.questionType === "array") {
         block.splice(3, 0, "S|" + table.subtitleOnly);
@@ -1215,21 +2932,40 @@ function generateOutput() {
 
     if (table.manualUseIndex) {
       block.push("USE=" + table.manualUseIndex + ", " + table.questionCode);
-    } else if (
-      table.questionType === "array" &&
-      table.arrayGroupId &&
-      table.arrayPosition > 0
-    ) {
-      const firstArrayIndex = getFirstArrayTableIndex(table);
+   } else if (
+  table.questionType === "array" &&
+  table.arrayGroupId &&
+  table.arrayPosition > 0
+) {
+  const firstArrayIndex = getFirstArrayTableIndex(table);
 
-      if (firstArrayIndex) {
-        block.push("USE=" + firstArrayIndex + ", " + table.questionCode);
-      } else {
-        block.push("*** ERROR: ARRAY FIRST TABLE NOT FOUND ***");
+  if (firstArrayIndex) {
+    block.push("USE=" + firstArrayIndex + ", " + table.questionCode);
+  } else {
+    block.push("*** ERROR: ARRAY FIRST TABLE NOT FOUND ***");
+  }
+
+  blocks.push(block.join("\n"));
+  return;
+
+} else if (normalizeRowType(table.rowType) === "custom_code") {
+      const dsLine = buildCustomDSLine(table);
+
+      if (dsLine) {
+        block.push(dsLine);
       }
-    } else if (normalizeRowType(table.rowType) === "custom_code") {
-      const answerRows = buildRowsFromAnswerOptions(table.answerOptions, table.questionCode);
+
+      const netGroupLines = buildCustomNetGroupLines(table);
+      netGroupLines.forEach(line => block.push(line));
+
+      const answerRows = buildRowsFromAnswerOptions(
+      table.answerOptions,
+      table.questionCode,
+      table.customNetGroups || []
+    );
+
       answerRows.forEach(line => block.push(line));
+
     } else {
       const rowLines = buildRowTemplateLines(table);
       rowLines.forEach(line => block.push(line));
@@ -1247,12 +2983,48 @@ function clearInputFields() {
   questionTypeSelect.value = "";
   rowTypeSelect.value = "";
   questionTextInput.value = "";
+  demographicAdditionalCodesInput.value = "";
+
+  populateRowTypeOptions(normalRowTypeOptions, "");
 
   answerOptionsInput.value = "";
+  customNetGroupsInput.value = "";
+  customDSPositiveSelect.innerHTML = "";
+  customDSNegativeSelect.innerHTML = "";
+  customDSBox.classList.add("hidden");
+
   useSTCheckbox.checked = false;
   useDSCheckbox.checked = true;
   subtitleOnlyInput.value = "";
   manualUseIndexInput.value = "";
+
+  useCustomNetGroupsCheckbox.checked = false;
+  customNetGroupsInput.value = "";
+  customDSPositiveSelect.innerHTML = "";
+  customDSNegativeSelect.innerHTML = "";
+  customDSBox.classList.add("hidden");
+  toggleCustomNetGroupBox();
+
+ arraySampleExtraRowsInput.value = "";
+  arraySampleTableContainer.innerHTML = "";
+  arraySampleModal.classList.add("hidden");
+
+  listoutManualSectionsInput.value = "";
+
+  includeVersionSectionCheckbox.checked = true;
+  versionExtraRowsInput.value = "";
+
+  includeModeSectionCheckbox.checked = true;
+  modeExtraRowsInput.value = "";
+
+  includeDateSectionCheckbox.checked = true;
+  dateVariableInput.value = "submitdate";
+  startDateInput.value = "";
+  endDateInput.value = "";
+
+  closePlusSection(toggleVersionExtraBtn, versionExtraBox, "+ Add VERSION Extra Rows");
+  closePlusSection(toggleModeExtraBtn, modeExtraBox, "+ Add MODE Extra Rows");
+  closePlusSection(toggleDateSetupBtn, dateSetupBox, "+ Add DATE Range");
 
   baseTypeSelect.value = "total_sample";
   askedBaseTextInput.value = "";
@@ -1277,6 +3049,7 @@ function clearInputFields() {
 
   toggleQuestionTypeUI();
   toggleAnswerOptionsBox();
+  toggleUseDSBox();
   toggleSubtitleBox();
   toggleAskedBaseBox();
 }
@@ -1302,19 +3075,133 @@ function toggleSubtitleBox() {
 }
 
 function toggleAskedBaseBox() {
-  if (baseTypeSelect.value === "asked_base") {
-    askedBaseBox.classList.remove("hidden");
-  } else {
+  const isAskedBase = baseTypeSelect.value === "asked_base";
+  const isArray = questionTypeSelect.value === "array";
+
+  if (!isAskedBase) {
     askedBaseBox.classList.add("hidden");
+    askedBaseTextBox.classList.remove("hidden");
+    arraySampleSetupBox.classList.add("hidden");
+    return;
+  }
+
+  askedBaseBox.classList.remove("hidden");
+
+  if (isArray) {
+    askedBaseTextBox.classList.add("hidden");
+    arraySampleSetupBox.classList.remove("hidden");
+
+    if (useArraySampleSetupCheckbox) {
+      useArraySampleSetupCheckbox.checked = true;
+    }
+  } else {
+    askedBaseTextBox.classList.remove("hidden");
+    arraySampleSetupBox.classList.add("hidden");
   }
 }
 
-function toggleAnswerOptionsBox() {
-  if (normalizeRowType(rowTypeSelect.value) === "custom_code" && questionTypeSelect.value !== "summary_table") {
-    answerOptionsBox.classList.remove("hidden");
-  } else {
-    answerOptionsBox.classList.add("hidden");
+function parseArraySampleLabels(text) {
+  return String(text || "")
+    .split("\n")
+    .map(line => line.trim())
+    .filter(line => line !== "");
+}
+
+function getArraySampleDefinitions() {
+  const samples = [
+    { name: "SAMPLE A" },
+    { name: "SAMPLE B" }
+  ];
+
+  const extraLabels = parseArraySampleLabels(arraySampleExtraRowsInput.value);
+
+  extraLabels.forEach(label => {
+    samples.push({
+      name: label.toUpperCase()
+    });
+  });
+
+  return samples;
+}
+
+function buildArraySampleSetup() {
+  const questionCodes = expandQuestionCodes(questionCodeInput.value.trim());
+
+  if (questionCodes.length === 0) {
+    alert("Please enter Question Code range first. Example: Q1:5");
+    return;
   }
+
+  if (questionTypeSelect.value !== "array") {
+    alert("Array Sample Setup chỉ dùng cho Question Type = Array.");
+    return;
+  }
+
+  if (baseTypeSelect.value !== "asked_base") {
+    alert("Please choose Base Type = Asked Base first.");
+    return;
+  }
+
+  const sampleDefs = getArraySampleDefinitions();
+
+  const subtitleLines = subtitleOnlyInput.value
+    .split("\n")
+    .map(line => line.trim())
+    .filter(line => line !== "");
+
+  const rows = questionCodes.map((code, index) => {
+    const options = sampleDefs.map(sample => {
+      return `<option value="${sample.name}">${sample.name}</option>`;
+    }).join("");
+
+    return `
+      <tr>
+        <td>${code}</td>
+        <td>${subtitleLines[index] || code}</td>
+        <td>
+          <select class="array-sample-select" data-index="${index}">
+            <option value="">Blank</option>
+            ${options}
+          </select>
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  arraySampleTableContainer.innerHTML = `
+    <table class="array-sample-table">
+      <thead>
+        <tr>
+          <th>Question Code</th>
+          <th>Code Label / Subtitle</th>
+          <th>Sample Name</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>
+  `;
+
+  arraySampleModal.classList.remove("hidden");
+}
+
+function getArraySampleSelections() {
+  const selects = [...arraySampleTableContainer.querySelectorAll(".array-sample-select")];
+
+  return selects.map(select => {
+    return {
+      sampleName: select.value || ""
+    };
+  });
+}
+
+function closeArraySampleModal() {
+  arraySampleModal.classList.add("hidden");
+}
+
+function toggleArraySampleSetupBox() {
+  toggleAskedBaseBox();
 }
 
 function toggleSplitABBox() {
@@ -1327,31 +3214,122 @@ function toggleSplitABBox() {
   }
 }
 
+function buildMultipleChoiceVariable(baseQuestionCode, answerCode) {
+  return baseQuestionCode + "_" + answerCode;
+}
+
+function buildMultipleChoiceAnswerRows(answerOptionsText, questionCode, netGroups = []) {
+  const options = parseAnswerOptions(answerOptionsText);
+
+  return options.map(option => {
+    const variableName = buildMultipleChoiceVariable(questionCode, option.code);
+
+    const shouldIndent = isAnswerCodeInsideNetGroups(option.code, netGroups);
+    const indent = shouldIndent ? "   " : " ";
+
+    return (
+      indent +
+      option.label.padEnd(30) +
+      "^ " +
+      variableName +
+      " (1)^"
+    );
+  });
+}
+
+function buildMultipleChoiceNetGroupLines(table) {
+  const netGroups = table.customNetGroups || [];
+
+  return netGroups.map(group => {
+    const codes = expandCodeRange(group.range);
+
+    const logic = codes.map(code => {
+      const variableName = buildMultipleChoiceVariable(table.questionCode, code);
+      return variableName + " (1)";
+    }).join(" or ");
+
+    return (
+      " " +
+      group.label.padEnd(30) +
+      "^ {" +
+      logic +
+      "}^" +
+      group.options
+    );
+  });
+}
+
 const summarySetupPanel = document.getElementById("summarySetupPanel");
 
 function toggleQuestionTypeUI() {
-  if (questionTypeSelect.value === "summary_table") {
+  const questionType = questionTypeSelect.value;
+
+  summarySetupPanel.classList.add("hidden");
+  rankingSetupPanel.classList.add("hidden");
+  demographicSetupPanel.classList.add("hidden");
+  listoutSetupPanel.classList.add("hidden");
+
+  rowTypeBox.classList.remove("hidden");
+  normalOptionsBox.classList.remove("hidden");
+
+  if (questionType === "summary_table") {
     summarySetupPanel.classList.remove("hidden");
-    rankingSetupPanel.classList.add("hidden");
-
-    normalOptionsBox.classList.add("hidden");
     rowTypeBox.classList.add("hidden");
-    answerOptionsBox.classList.add("hidden");
-  } else if (questionTypeSelect.value === "ranking_table") {
-    rankingSetupPanel.classList.remove("hidden");
-    summarySetupPanel.classList.add("hidden");
-
     normalOptionsBox.classList.add("hidden");
-    rowTypeBox.classList.add("hidden");
     answerOptionsBox.classList.add("hidden");
-  } else {
-    summarySetupPanel.classList.add("hidden");
-    rankingSetupPanel.classList.add("hidden");
-
-    normalOptionsBox.classList.remove("hidden");
-    rowTypeBox.classList.remove("hidden");
-    toggleAnswerOptionsBox();
+      toggleUseDSBox();
+      toggleAskedBaseBox();
+    return;
   }
+
+  if (questionType === "ranking_table") {
+    rankingSetupPanel.classList.remove("hidden");
+    rowTypeBox.classList.add("hidden");
+    normalOptionsBox.classList.add("hidden");
+    answerOptionsBox.classList.add("hidden");
+      toggleUseDSBox();
+      toggleAskedBaseBox();
+    return;
+  }
+
+  if (questionType === "multiple_choice") {
+    rowTypeBox.classList.add("hidden");
+    normalOptionsBox.classList.add("hidden");
+    answerOptionsBox.classList.remove("hidden");
+    toggleCustomNetGroupBox();
+      toggleUseDSBox();
+      toggleAskedBaseBox();
+    return;
+  }
+
+  if (questionType === "demographic") {
+    demographicSetupPanel.classList.remove("hidden");
+    normalOptionsBox.classList.add("hidden");
+    populateRowTypeOptions(demographicRowTypeOptions, rowTypeSelect.value);
+    toggleAnswerOptionsBox();
+    toggleUseDSBox();
+    toggleAskedBaseBox();
+    return;
+    
+  }
+
+  if (questionType === "listout_table") {
+  listoutSetupPanel.classList.remove("hidden");
+
+  rowTypeBox.classList.add("hidden");
+  normalOptionsBox.classList.add("hidden");
+  answerOptionsBox.classList.add("hidden");
+  demographicSetupPanel.classList.add("hidden");
+  summarySetupPanel.classList.add("hidden");
+  rankingSetupPanel.classList.add("hidden");
+
+  return;
+}
+
+  populateRowTypeOptions(normalRowTypeOptions, rowTypeSelect.value);
+  toggleAnswerOptionsBox();
+  toggleUseDSBox();
+  toggleAskedBaseBox();
 }
 
 async function copyOutput() {
@@ -1394,14 +3372,39 @@ rankingSplitModal.addEventListener("click", function (event) {
   }
 });
 
-questionTypeSelect.addEventListener("change", toggleQuestionTypeUI);
-rowTypeSelect.addEventListener("change", toggleAnswerOptionsBox);
+questionTypeSelect.addEventListener("change", function () {
+  if (questionTypeSelect.value === "demographic") {
+    populateRowTypeOptions(demographicRowTypeOptions, "");
+  }
+
+  if (
+    questionTypeSelect.value === "single_choice" ||
+    questionTypeSelect.value === "array" ||
+    questionTypeSelect.value === ""
+  ) {
+    populateRowTypeOptions(normalRowTypeOptions, "");
+  }
+
+  toggleQuestionTypeUI();
+  toggleAskedBaseBox();
+});
+
+rowTypeSelect.addEventListener("change", function () {
+  toggleAnswerOptionsBox();
+  toggleUseDSBox();
+});
 useSTCheckbox.addEventListener("change", toggleSubtitleBox);
-baseTypeSelect.addEventListener("change", toggleAskedBaseBox);
+
+baseTypeSelect.addEventListener("change", function () {
+  toggleAskedBaseBox();
+});
+
+useCustomNetGroupsCheckbox.addEventListener("change", toggleCustomNetGroupBox);
 buildSummarySetupBtn.addEventListener("click", buildSummarySetup);
 openSummaryModalBtn.addEventListener("click", openSummaryModal);
 closeSummaryModalBtn.addEventListener("click", closeSummaryModal);
 saveSummaryModalBtn.addEventListener("click", closeSummaryModal);
+buildCustomDSBtn.addEventListener("click", buildCustomDSSetup);
 
 summaryModal.addEventListener("click", function (event) {
   if (event.target === summaryModal) {
@@ -1409,10 +3412,63 @@ summaryModal.addEventListener("click", function (event) {
   }
 });
 
+populateRowTypeOptions(normalRowTypeOptions, "");
 renderInputList();
 generateOutput();
 toggleQuestionTypeUI();
+toggleAskedBaseBox();
 toggleSubtitleBox();
 toggleAskedBaseBox();
 toggleAnswerOptionsBox();
-toggleSplitABBox();
+toggleCustomNetGroupBox();
+
+toggleVersionExtraBtn.addEventListener("click", function () {
+  togglePlusSection(
+    toggleVersionExtraBtn,
+    versionExtraBox,
+    "+ Add VERSION Extra Rows",
+    "− Hide VERSION Extra Rows"
+  );
+});
+
+toggleModeExtraBtn.addEventListener("click", function () {
+  togglePlusSection(
+    toggleModeExtraBtn,
+    modeExtraBox,
+    "+ Add MODE Extra Rows",
+    "− Hide MODE Extra Rows"
+  );
+});
+
+toggleDateSetupBtn.addEventListener("click", function () {
+  togglePlusSection(
+    toggleDateSetupBtn,
+    dateSetupBox,
+    "+ Add DATE Range",
+    "− Hide DATE Range"
+  );
+});
+
+buildArraySampleBtn.addEventListener("click", buildArraySampleSetup);
+
+closeArraySampleModalBtn.addEventListener("click", function () {
+  arraySampleModal.classList.add("hidden");
+});
+
+saveArraySampleModalBtn.addEventListener("click", function () {
+  arraySampleModal.classList.add("hidden");
+});
+
+arraySampleModal.addEventListener("click", function (event) {
+  if (event.target === arraySampleModal) {
+    arraySampleModal.classList.add("hidden");
+  }
+});
+
+answerOptionsInput.addEventListener("blur", function () {
+  answerOptionsInput.value = answerOptionsInput.value.toUpperCase();
+});
+
+customNetGroupsInput.addEventListener("blur", function () {
+  customNetGroupsInput.value = customNetGroupsInput.value.toUpperCase();
+});

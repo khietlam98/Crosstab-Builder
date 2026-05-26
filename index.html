@@ -32,18 +32,21 @@
 
         <div class="form-group">
           <label for="questionCode">Question Code / Table Code</label>
-          <input id="questionCode" type="text" placeholder="Example: Q1, Q1:5, or 1 for summary table" />
-          <small>Single/Array dùng Q1, Q1:5. Summary có thể nhập 1 để output T1.</small>
+          <input id="questionCode" type="text" placeholder="Example: Q1, Q1:5, or 1" />
+          <small>Single insert Q1, Array/ MCQ insert Q1:5</small>
         </div>
 
         <div class="form-group">
           <label for="questionType">Question Type</label>
           <select id="questionType">
             <option value="" selected disabled>Please select a type...</option>
-            <option value="single_choice">Single-choice</option>
+            <option value="single_choice">Single Choice</option>
+            <option value="multiple_choice">Multiple Choice</option>
             <option value="summary_table">Summary Table</option>
             <option value="ranking_table">Ranking Table</option>
             <option value="array">Array</option>
+            <option value="demographic">Demographic</option>
+            <option value="listout_table">List Out Table</option>
           </select>
         </div>
 
@@ -66,19 +69,53 @@
 
         <div class="form-group">
           <label for="questionText">Question Text / Summary Title</label>
-          <textarea id="questionText" placeholder="Example: SUMMARY OF KEY DATA"></textarea>
-          <small>Summary table sẽ output dòng này trực tiếp, không thêm QUESTION X:|.</small>
+          <textarea id="questionText" placeholder="Example: What was the last level of education you completed?
+               SUMMARY OF KEY DATA"></textarea>
         </div>
 
         <div id="answerOptionsBox" class="form-group hidden">
-          <label for="answerOptions">Answer Options</label>
-          <textarea id="answerOptions" placeholder="Paste answer options here. Example:
+  <label for="answerOptions">Answer Options</label>
+  <textarea id="answerOptions" placeholder="Paste answer options here. Example:
 1	DEFINITELY YES
 2	PROBABLY YES
 3	UNDECIDED, LEAN YES"></textarea>
-          <small>Chỉ hiện khi Row Type = CUSTOM CODE.</small>
-        </div>
 
+  <div class="custom-code-extra">
+    <div class="checkbox-row">
+      <input id="useCustomNetGroups" type="checkbox" />
+      <label for="useCustomNetGroups">Active Total / Net Groups</label>
+    </div>
+
+    <div id="customNetGroupBox" class="hidden">
+      <label for="customNetGroups">Total / Net Groups</label>
+      <textarea id="customNetGroups" placeholder="Example:
+        1:2	TOTAL YES
+        3:4	TOTAL NO"></textarea>
+      <small>
+       Format: code range + label
+      </small>
+
+      <button id="buildCustomDSBtn" type="button" class="secondary">
+        Build D/S Setup
+      </button>
+
+      <div id="customDSBox" class="custom-ds-box hidden">
+        <div class="custom-ds-grid">
+          <div class="form-group">
+            <label for="customDSPositive">D/S Positive Row</label>
+            <select id="customDSPositive"></select>
+          </div>
+
+          <div class="form-group">
+            <label for="customDSNegative">D/S Negative Row</label>
+            <select id="customDSNegative"></select>
+          </div>
+        </div>
+        <small>Select answer options for D/S positive and negativs</small>
+      </div>
+    </div>
+  </div>
+</div>
         <div id="normalOptionsBox">
           <div class="checkbox-row">
             <input id="useST" type="checkbox" />
@@ -87,10 +124,12 @@
 
           <div id="subtitleBox" class="form-group hidden">
             <label for="subtitleOnly">Subtitle Text</label>
-            <textarea id="subtitleOnly" placeholder="For range Q1:5, paste one subtitle per line."></textarea>
+            <textarea id="subtitleOnly" placeholder="For range eg. Q24:25, paste one subtitle per line.
+eg. 24.	If we don't take care of our parks and trails and keep up our recreation facilities
+    25.	In today's digital age, it is more important than ever to have places where children can safely run"></textarea>
           </div>
 
-          <div class="checkbox-row">
+          <div id="useDSBox" class="checkbox-row">
             <input id="useDS" type="checkbox" checked />
             <label for="useDS">Active D/S</label>
           </div>
@@ -98,7 +137,6 @@
           <div class="form-group">
             <label for="manualUseIndex">USE Index</label>
             <input id="manualUseIndex" type="number" placeholder="Optional. Example: 1, 5, 17" />
-            <small>Nếu nhập USE Index thì app sẽ output USE=index, question code.</small>
           </div>
         </div>
 
@@ -110,11 +148,36 @@
           </select>
         </div>
 
-        <div id="askedBaseBox" class="form-group hidden">
-          <label for="askedBaseText">Asked Base Text</label>
-          <input id="askedBaseText" type="text" placeholder="Example: SAMPLE A,SAMPLE B" />
-          <small>Nếu generate nhiều table, có thể nhập nhiều base cách nhau bằng dấu phẩy.</small>
-        </div>
+       <div id="askedBaseBox" class="form-group hidden">
+  <div id="askedBaseTextBox">
+    <label for="askedBaseText">Asked Base Text</label>
+    <input id="askedBaseText" type="text" placeholder="Example: SAMPLE A,SAMPLE B" />
+    <small>Nếu generate nhiều table, có thể nhập nhiều base cách nhau bằng dấu phẩy.</small>
+  </div>
+
+  <div id="arraySampleSetupBox" class="array-sample-box hidden">
+    <hr>
+
+    <div class="checkbox-row">
+      <input id="useArraySampleSetup" type="checkbox" checked />
+      <label for="useArraySampleSetup">Use Array Sample Setup</label>
+    </div>
+
+    <label for="arraySampleExtraRows">Additional Sample Labels</label>
+    <textarea id="arraySampleExtraRows" placeholder="Optional. Example:
+SAMPLE C
+SAMPLE D
+SAMPLE E"></textarea>
+
+    <small>
+      Mặc định đã có SAMPLE A và SAMPLE B. Nếu cần thêm sample thì chỉ nhập tên sample.
+    </small>
+
+    <button id="buildArraySampleBtn" type="button" class="secondary">
+      Build Array Sample Setup
+    </button>
+  </div>
+</div>
 
         <!-- Summary setup nằm trong Input section -->
         <div id="summarySetupPanel" class="summary-box hidden">
@@ -170,22 +233,113 @@
     </div>
 
     <small>Output mặc định: A^ SplitAB (1) ^HR,SX và B^ SplitAB (2) ^HR,SX.</small>
-  </div>
+      </div>
+
+      <div class="form-group">
+        <label for="rankingItemsInput">Ranking Items</label>
+        <textarea id="rankingItemsInput" class="summary-raw" placeholder="6 IMPROVING STREETS
+    7 INCREASING SAFETY FOR DRIVERS
+    8 INCREASING SAFETY FOR DRIVERS & PEDS"></textarea>
+        <small>Có thể paste dạng: 7 | INCREASING SAFETY FOR DRIVERS | 1</small>
+      </div>
+
+      <div class="summary-preview-actions">
+        <button id="buildRankingSplitBtn" type="button" class="secondary hidden">
+          Build Split Code Setup
+        </button>
+      </div>
+    </div>
+
+    <div id="demographicSetupPanel" class="summary-box hidden">
+      <h3>Demographic Setup</h3>
+
+      <div class="form-group">
+        <label for="demographicAdditionalCodes">Additional Codes</label>
+        <textarea id="demographicAdditionalCodes" class="summary-raw" placeholder="Example:
+    WHITE MEN	D6:2 AND D2:1
+    WHITE WOMEN	D6:2 AND D2:2
+    NONWHITE MEN	D6:1,3-5 AND D2:1
+    NONWHITE WOMEN	D6:1,3-5 AND D2:2"></textarea>
+        <small>App sẽ tự convert D6:2 AND D2:1 thành D6(2) & D2(1).</small>
+      </div>
+    </div>
+
+    <div id="listoutSetupPanel" class="summary-box hidden">
+  <h3>List Out Table Setup</h3>
 
   <div class="form-group">
-    <label for="rankingItemsInput">Ranking Items</label>
-    <textarea id="rankingItemsInput" class="summary-raw" placeholder="6 IMPROVING STREETS
-7 INCREASING SAFETY FOR DRIVERS
-8 INCREASING SAFETY FOR DRIVERS & PEDS"></textarea>
-    <small>Có thể paste dạng: 7 | INCREASING SAFETY FOR DRIVERS | 1</small>
+    <label for="listoutManualSections">Manual Sections</label>
+    <textarea id="listoutManualSections" class="summary-raw" placeholder="Example:
+Region | REGION_CODED
+ARCHULETA | 1-8
+3065904001 | 1
+3065904002 | 2
+HINSDALE | 9
+3055827001 | 9
+
+Language | LANGUAGE
+ENGLISH | 1
+SPANISH | 2"></textarea>
+    <small>
+      Format section đầu: SECTION NAME | VARIABLE. Dòng có range như 1-8 sẽ là group row. Dòng code đơn như 1, 2 sẽ là child row.
+    </small>
   </div>
 
-  <div class="summary-preview-actions">
-    <button id="buildRankingSplitBtn" type="button" class="secondary hidden">
-      Build Split Code Setup
-    </button>
-  </div>
+  <div class="checkbox-row">
+  <input id="includeVersionSection" type="checkbox" checked />
+  <label for="includeVersionSection">Include VERSION</label>
 </div>
+
+<button id="toggleVersionExtraBtn" type="button" class="plus-toggle">
+  + Add VERSION Extra Rows
+</button>
+
+<div id="versionExtraBox" class="form-group hidden">
+  <label for="versionExtraRows">VERSION Extra Rows</label>
+  <textarea id="versionExtraRows" placeholder="Optional. Example:
+SAMPLE C | SplitCD | 3"></textarea>
+  <small>Mặc định app luôn output SAMPLE A và SAMPLE B. Nhập thêm nếu có SAMPLE C, SAMPLE D...</small>
+</div>
+
+<div class="checkbox-row">
+  <input id="includeModeSection" type="checkbox" checked />
+  <label for="includeModeSection">Include MODE</label>
+</div>
+
+<button id="toggleModeExtraBtn" type="button" class="plus-toggle">
+  + Add MODE Extra Rows
+</button>
+
+<div id="modeExtraBox" class="form-group hidden">
+  <label for="modeExtraRows">MODE Extra Rows</label>
+  <textarea id="modeExtraRows" placeholder="Optional. Example:
+WEB | modetype | 5
+APP | modetype | 6"></textarea>
+  <small>Mặc định app luôn output LANDLINE, CELL, TEXT, EMAIL. Nhập thêm nếu cần.</small>
+</div>
+
+<div class="checkbox-row">
+  <input id="includeDateSection" type="checkbox" checked />
+  <label for="includeDateSection">Include DATE</label>
+</div>
+
+<button id="toggleDateSetupBtn" type="button" class="plus-toggle">
+  + Add DATE Range
+</button>
+
+<div id="dateSetupBox" class="form-group hidden">
+  <label>Date Setup</label>
+
+  <div class="mini-grid">
+    <input id="dateVariable" type="text" value="submitdate" placeholder="Date variable" />
+    <input id="startDateInput" type="text" placeholder="Start date: 20260421" />
+    <input id="endDateInput" type="text" placeholder="End date: 20260430" />
+  </div>
+
+  <small>Format date: YYYYMMDD. App sẽ tự generate TUE, APRIL 21...</small>
+</div>
+
+</div> <!-- đóng listoutSetupPanel -->
 
         <div class="button-row">
           <button id="addBtn">Add Table</button>
@@ -255,6 +409,27 @@
 
     <div class="modal-footer">
       <button id="saveRankingSplitModalBtn" type="button">Save & Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="arraySampleModal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2>Array Sample Setup</h2>
+      <button id="closeArraySampleModalBtn" type="button" class="modal-close">×</button>
+    </div>
+
+    <div class="modal-body">
+      <p class="modal-help">
+        Chọn sample/base cho từng array item. Dropdown sẽ hiện Sample Name cho dễ nhìn.
+      </p>
+
+      <div id="arraySampleTableContainer"></div>
+    </div>
+
+    <div class="modal-footer">
+      <button id="saveArraySampleModalBtn" type="button">Save & Close</button>
     </div>
   </div>
 </div>
