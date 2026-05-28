@@ -353,10 +353,8 @@ const rankingItemsInput = document.getElementById("rankingItemsInput");
 
 const useSplitABCheckbox = document.getElementById("useSplitAB");
 const splitABBox = document.getElementById("splitABBox");
-const splitVariableInput = document.getElementById("splitVariable");
-const splitACodeInput = document.getElementById("splitACode");
-const splitBCodeInput = document.getElementById("splitBCode");
-const splitOptionsInput = document.getElementById("splitOptions");
+const splitRowsContainer = document.getElementById("splitRowsContainer");
+const addSplitRowBtn = document.getElementById("addSplitRowBtn");
 
 const listoutSetupPanel = document.getElementById("listoutSetupPanel");
 const listoutManualSectionsInput = document.getElementById("listoutManualSections");
@@ -412,24 +410,114 @@ function getArrayItemLabels(questionCodes) {
   });
 }
 
+function createSplitRow(label = "", variable = "", code = "") {
+  const row = document.createElement("div");
+  row.className = "split-row";
+
+  row.innerHTML = `
+    <input class="split-row-label" type="text" value="${label}" placeholder="Label" />
+    <input class="split-row-variable" type="text" value="${variable}" placeholder="Logic" />
+    <input class="split-row-code" type="text" value="${code}" placeholder="Code" />
+    <button type="button" class="remove-split-row-btn secondary">×</button>
+  `;
+
+  splitRowsContainer.appendChild(row);
+}
+
+function resetSplitRows() {
+  splitRowsContainer.innerHTML = "";
+  createSplitRow("A", "SplitAB", "1");
+  createSplitRow("B", "SplitAB", "2");
+}
+
+function getSplitRowsFromInput() {
+  const rows = [...splitRowsContainer.querySelectorAll(".split-row")];
+
+  return rows.map(row => {
+    const label = row.querySelector(".split-row-label").value.trim();
+    const variable = row.querySelector(".split-row-variable").value.trim();
+    const code = row.querySelector(".split-row-code").value.trim();
+
+    return {
+      label,
+      variable,
+      code,
+      options: "HR,SX"
+    };
+  }).filter(row => row.label && row.variable && row.code);
+}
+
+function loadSplitRowsToInput(splitRows) {
+  splitRowsContainer.innerHTML = "";
+
+  if (!splitRows || splitRows.length === 0) {
+    resetSplitRows();
+    return;
+  }
+
+  splitRows.forEach(row => {
+    createSplitRow(row.label || "", row.variable || "", row.code || "");
+  });
+}
+
 function parseRankingMetrics(text) {
-  const lines = text
+  const lines = String(text || "")
     .split("\n")
     .map(line => line.trim())
     .filter(line => line !== "");
 
   return lines.map(line => {
-    const match = line.match(/^(.*?)\s*\(:\s*([^)]+)\s*\)\s*$/);
+    /*
+      Supported:
+      % EXT IMPT (:1)
+      % EXT/VERY IMPT (:1-2)
+      % TOT IMPT (:1-3)
+
+      Also supports:
+      % EXT IMPT | 1
+      % EXT/VERY IMPT | 1-2
+    */
+
+    if (line.includes("|")) {
+      const parts = line.split("|").map(part => part.trim());
+
+      if (parts.length < 2) {
+        return null;
+      }
+
+      return {
+        label: normalizeRankingMetricLabel(parts[0]),
+        code: normalizeRankingMetricCode(parts[1])
+      };
+    }
+
+    const match = line.match(/^(.*?)\s*\(\s*:?\s*([0-9,\-]+)\s*\)\s*$/);
 
     if (!match) {
       return null;
     }
 
     return {
-      label: match[1].trim(),
-      code: match[2].trim()
+      label: normalizeRankingMetricLabel(match[1]),
+      code: normalizeRankingMetricCode(match[2])
     };
-  }).filter(item => item !== null);
+  }).filter(item => {
+    return item !== null && item.label !== "" && item.code !== "";
+  });
+}
+
+function normalizeRankingMetricLabel(label) {
+  return String(label || "")
+    .replace(/^RANKED\s+BY\s+/i, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+}
+
+function normalizeRankingMetricCode(code) {
+  return String(code || "")
+    .replace(/^:/, "")
+    .trim();
 }
 
 const normalRowTypeOptions = [
@@ -509,23 +597,11 @@ function closePlusSection(button, box, openText) {
 function toggleUseDSBox() {
   const isCustomCode = normalizeRowType(rowTypeSelect.value) === "custom_code";
   const isMultipleChoice = questionTypeSelect.value === "multiple_choice";
+
   const isSummaryOrRanking =
     questionTypeSelect.value === "summary_table" ||
-    questionTypeSelect.value === "ranking_table";
-
-  if (isCustomCode || isMultipleChoice || isSummaryOrRanking) {
-    useDSBox.classList.add("hidden");
-  } else {
-    useDSBox.classList.remove("hidden");
-  }
-}
-
-function toggleUseDSBox() {
-  const isCustomCode = normalizeRowType(rowTypeSelect.value) === "custom_code";
-  const isMultipleChoice = questionTypeSelect.value === "multiple_choice";
-  const isSummaryOrRanking =
-    questionTypeSelect.value === "summary_table" ||
-    questionTypeSelect.value === "ranking_table";
+    questionTypeSelect.value === "ranking_table" ||
+    questionTypeSelect.value === "listout_table";
 
   if (isCustomCode || isMultipleChoice || isSummaryOrRanking) {
     useDSBox.classList.add("hidden");
@@ -546,11 +622,14 @@ function toggleCustomNetGroupBox() {
 function toggleAnswerOptionsBox() {
   const isCustomCode = normalizeRowType(rowTypeSelect.value) === "custom_code";
   const isMultipleChoice = questionTypeSelect.value === "multiple_choice";
+  const isArray = questionTypeSelect.value === "array";
+
   const isSummaryOrRanking =
     questionTypeSelect.value === "summary_table" ||
-    questionTypeSelect.value === "ranking_table";
+    questionTypeSelect.value === "ranking_table" ||
+    questionTypeSelect.value === "listout_table";
 
-  if ((isCustomCode || isMultipleChoice) && !isSummaryOrRanking) {
+  if ((isCustomCode || isMultipleChoice || isArray) && !isSummaryOrRanking) {
     answerOptionsBox.classList.remove("hidden");
   } else {
     answerOptionsBox.classList.add("hidden");
@@ -784,15 +863,24 @@ function buildSplitABLines(table) {
     return [];
   }
 
-  const splitVar = table.splitVariable || "SplitAB";
-  const splitA = table.splitACode || "1";
-  const splitB = table.splitBCode || "2";
-  const splitOptions = table.splitOptions || "HR,SX";
+  const splitRows = table.splitRows && table.splitRows.length
+    ? table.splitRows
+    : [
+        { label: "A", variable: "SplitAB", code: "1", options: "HR,SX" },
+        { label: "B", variable: "SplitAB", code: "2", options: "HR,SX" }
+      ];
 
-  return [
-    " A^ " + splitVar + " (" + splitA + ") ^" + splitOptions,
-    " B^ " + splitVar + " (" + splitB + ") ^" + splitOptions
-  ];
+  return splitRows.map(row => {
+    return (
+      " " +
+      row.label +
+      "^ " +
+      row.variable +
+      " (" +
+      row.code +
+      ") ^HR,SX"
+    );
+  });
 }
 
 function buildRankingTableLines(table) {
@@ -2201,10 +2289,7 @@ if (
         rankingItems,
 
         useSplitAB: useSplitABCheckbox.checked,
-        splitVariable: splitVariableInput.value.trim() || "SplitAB",
-        splitACode: splitACodeInput.value.trim() || "1",
-        splitBCode: splitBCodeInput.value.trim() || "2",
-        splitOptions: splitOptionsInput.value.trim() || "HR,SX",
+        splitRows: getSplitRowsFromInput(),
 
         summaryRaw: "",
         summaryBlocks: [],
@@ -2456,9 +2541,40 @@ return questionCodes.map((code, index) => {
 }
 
 function buildRankingTitle(baseTitle, metricLabel) {
-  const cleanBaseTitle = baseTitle.trim();
-  const cleanMetricLabel = metricLabel.trim().toUpperCase();
+  let cleanBaseTitle = String(baseTitle || "")
+    .replace(/\s+/g, " ")
+    .trim();
 
+  const cleanMetricLabel = normalizeRankingMetricLabel(metricLabel);
+
+  /*
+    Nếu user lỡ nhập sẵn metric trong Question Text,
+    app sẽ cố gắng cắt bớt để tránh duplicate.
+    Ví dụ:
+    SUMMARY OF FUNDING ITEMS: RANKED BY % EXT/VERY IMPT
+    → SUMMARY OF FUNDING ITEMS: RANKED BY
+  */
+  cleanBaseTitle = cleanBaseTitle
+    .replace(/\s*%+\s*EXT\/VERY\s+IMPT.*$/i, "")
+    .replace(/\s*%+\s*EXT\s+IMPT.*$/i, "")
+    .replace(/\s*%+\s*TOT\s+IMPT.*$/i, "")
+    .trim();
+
+  if (!cleanBaseTitle) {
+    return cleanMetricLabel;
+  }
+
+  /*
+    Nếu title đã kết thúc bằng "RANKED BY",
+    nối trực tiếp metric vào sau.
+  */
+  if (/RANKED\s+BY$/i.test(cleanBaseTitle)) {
+    return cleanBaseTitle + " " + cleanMetricLabel;
+  }
+
+  /*
+    Nếu title kết thúc bằng dấu ":" thì nối space + metric.
+  */
   if (cleanBaseTitle.endsWith(":")) {
     return cleanBaseTitle + " " + cleanMetricLabel;
   }
@@ -2707,12 +2823,10 @@ if (table.questionType === "summary_table") {
 } else if (table.questionType === "ranking_table") {
   rankingMetricDefinitionsInput.value = table.rankingMetricDefinitions || "";
   rankingItemsInput.value = table.rankingItemsRaw || "";
+  useSplitABCheckbox.checked = !!table.useSplitAB;
 
-  useSplitABCheckbox.checked = table.useSplitAB || false;
-  splitVariableInput.value = table.splitVariable || "SplitAB";
-  splitACodeInput.value = table.splitACode || "1";
-  splitBCodeInput.value = table.splitBCode || "2";
-  splitOptionsInput.value = table.splitOptions || "HR,SX";
+  loadSplitRowsToInput(table.splitRows || []);
+
 
   toggleSplitABBox();
 
@@ -3032,10 +3146,7 @@ function clearInputFields() {
   rankingMetricDefinitionsInput.value = "";
   rankingItemsInput.value = "";
   useSplitABCheckbox.checked = false;
-  splitVariableInput.value = "SplitAB";
-  splitACodeInput.value = "1";
-  splitBCodeInput.value = "2";
-  splitOptionsInput.value = "HR,SX";
+  resetSplitRows();
   rankingSplitTableContainer.innerHTML = "";
   closeRankingSplitModal();
   toggleSplitABBox();
@@ -3422,6 +3533,10 @@ toggleAskedBaseBox();
 toggleAnswerOptionsBox();
 toggleCustomNetGroupBox();
 
+if (splitRowsContainer && splitRowsContainer.children.length === 0) {
+  resetSplitRows();
+}
+
 toggleVersionExtraBtn.addEventListener("click", function () {
   togglePlusSection(
     toggleVersionExtraBtn,
@@ -3471,4 +3586,18 @@ answerOptionsInput.addEventListener("blur", function () {
 
 customNetGroupsInput.addEventListener("blur", function () {
   customNetGroupsInput.value = customNetGroupsInput.value.toUpperCase();
+});
+
+addSplitRowBtn.addEventListener("click", function () {
+  createSplitRow("", "", "");
+});
+
+splitRowsContainer.addEventListener("click", function (event) {
+  if (event.target.classList.contains("remove-split-row-btn")) {
+    const row = event.target.closest(".split-row");
+
+    if (row) {
+      row.remove();
+    }
+  }
 });
