@@ -411,6 +411,10 @@ function getArrayItemLabels(questionCodes) {
 }
 
 function createSplitRow(label = "", variable = "", code = "") {
+  if (!splitRowsContainer) {
+    return;
+  }
+
   const row = document.createElement("div");
   row.className = "split-row";
 
@@ -425,6 +429,10 @@ function createSplitRow(label = "", variable = "", code = "") {
 }
 
 function resetSplitRows() {
+  if (!splitRowsContainer) {
+    return;
+  }
+
   splitRowsContainer.innerHTML = "";
   createSplitRow("A", "SplitAB", "1");
   createSplitRow("B", "SplitAB", "2");
@@ -3091,72 +3099,113 @@ function generateOutput() {
   output.textContent = blocks.join("\n");
 }
 
+function safeSetValue(element, value) {
+  if (element) {
+    element.value = value;
+  }
+}
+
+function safeSetChecked(element, value) {
+  if (element) {
+    element.checked = value;
+  }
+}
+
+function safeAddHidden(element) {
+  if (element) {
+    element.classList.add("hidden");
+  }
+}
+
+function safeClearHTML(element) {
+  if (element) {
+    element.innerHTML = "";
+  }
+}
+
 function clearInputFields() {
   projectTypeSelect.value = "N2";
-  questionCodeInput.value = "";
-  questionTypeSelect.value = "";
-  rowTypeSelect.value = "";
-  questionTextInput.value = "";
-  demographicAdditionalCodesInput.value = "";
+
+  safeSetValue(questionCodeInput, "");
+  safeSetValue(questionTypeSelect, "");
+  safeSetValue(rowTypeSelect, "");
+  safeSetValue(questionTextInput, "");
 
   populateRowTypeOptions(normalRowTypeOptions, "");
 
-  answerOptionsInput.value = "";
-  customNetGroupsInput.value = "";
-  customDSPositiveSelect.innerHTML = "";
-  customDSNegativeSelect.innerHTML = "";
-  customDSBox.classList.add("hidden");
-
-  useSTCheckbox.checked = false;
-  useDSCheckbox.checked = true;
-  subtitleOnlyInput.value = "";
-  manualUseIndexInput.value = "";
-
-  useCustomNetGroupsCheckbox.checked = false;
-  customNetGroupsInput.value = "";
-  customDSPositiveSelect.innerHTML = "";
-  customDSNegativeSelect.innerHTML = "";
-  customDSBox.classList.add("hidden");
+  safeSetValue(answerOptionsInput, "");
+  safeSetChecked(useCustomNetGroupsCheckbox, false);
+  safeSetValue(customNetGroupsInput, "");
+  safeClearHTML(customDSPositiveSelect);
+  safeClearHTML(customDSNegativeSelect);
+  safeAddHidden(customDSBox);
   toggleCustomNetGroupBox();
 
- arraySampleExtraRowsInput.value = "";
-  arraySampleTableContainer.innerHTML = "";
-  arraySampleModal.classList.add("hidden");
+  safeSetChecked(useSTCheckbox, false);
+  safeSetChecked(useDSCheckbox, true);
+  safeSetValue(subtitleOnlyInput, "");
+  safeSetValue(manualUseIndexInput, "");
 
-  listoutManualSectionsInput.value = "";
+  safeSetValue(baseTypeSelect, "total_sample");
+  safeSetValue(askedBaseTextInput, "");
+  safeSetValue(arraySampleExtraRowsInput, "");
+  safeClearHTML(arraySampleTableContainer);
+  safeAddHidden(arraySampleModal);
 
-  includeVersionSectionCheckbox.checked = true;
-  versionExtraRowsInput.value = "";
+  safeSetValue(demographicAdditionalCodesInput, "");
 
-  includeModeSectionCheckbox.checked = true;
-  modeExtraRowsInput.value = "";
+  safeSetValue(listoutManualSectionsInput, "");
 
-  includeDateSectionCheckbox.checked = true;
-  dateVariableInput.value = "submitdate";
-  startDateInput.value = "";
-  endDateInput.value = "";
+  safeSetChecked(includeVersionSectionCheckbox, true);
+  safeSetValue(versionExtraRowsInput, "");
 
-  closePlusSection(toggleVersionExtraBtn, versionExtraBox, "+ Add VERSION Extra Rows");
-  closePlusSection(toggleModeExtraBtn, modeExtraBox, "+ Add MODE Extra Rows");
-  closePlusSection(toggleDateSetupBtn, dateSetupBox, "+ Add DATE Range");
+  safeSetChecked(includeModeSectionCheckbox, true);
+  safeSetValue(modeExtraRowsInput, "");
 
-  baseTypeSelect.value = "total_sample";
-  askedBaseTextInput.value = "";
+  safeSetChecked(includeDateSectionCheckbox, true);
+  safeSetValue(dateVariableInput, "submitdate");
+  safeSetValue(startDateInput, "");
+  safeSetValue(endDateInput, "");
 
-  rankingMetricDefinitionsInput.value = "";
-  rankingItemsInput.value = "";
-  useSplitABCheckbox.checked = false;
-  resetSplitRows();
-  rankingSplitTableContainer.innerHTML = "";
-  closeRankingSplitModal();
+  if (toggleVersionExtraBtn && versionExtraBox) {
+    closePlusSection(toggleVersionExtraBtn, versionExtraBox, "+ Add VERSION Extra Rows");
+  }
+
+  if (toggleModeExtraBtn && modeExtraBox) {
+    closePlusSection(toggleModeExtraBtn, modeExtraBox, "+ Add MODE Extra Rows");
+  }
+
+  if (toggleDateSetupBtn && dateSetupBox) {
+    closePlusSection(toggleDateSetupBtn, dateSetupBox, "+ Add DATE Range");
+  }
+
+  safeSetValue(rankingMetricDefinitionsInput, "");
+  safeSetValue(rankingItemsInput, "");
+  safeSetChecked(useSplitABCheckbox, false);
+
+  if (splitRowsContainer) {
+    resetSplitRows();
+  }
+
+  safeClearHTML(rankingSplitTableContainer);
+
+  if (rankingSplitModal) {
+    closeRankingSplitModal();
+  }
+
   toggleSplitABBox();
 
-  summaryRawInput.value = "";
-  summaryBlockCountInput.value = "";
-  summaryBlockSetupContainer.innerHTML = "";
+  safeSetValue(summaryRawInput, "");
+  safeSetValue(summaryBlockCountInput, "");
+  safeClearHTML(summaryBlockSetupContainer);
 
-  openSummaryModalBtn.classList.add("hidden");
-  closeSummaryModal();
+  if (openSummaryModalBtn) {
+    openSummaryModalBtn.classList.add("hidden");
+  }
+
+  if (summaryModal) {
+    closeSummaryModal();
+  }
 
   toggleQuestionTypeUI();
   toggleAnswerOptionsBox();
@@ -3316,6 +3365,10 @@ function toggleArraySampleSetupBox() {
 }
 
 function toggleSplitABBox() {
+  if (!useSplitABCheckbox || !splitABBox || !buildRankingSplitBtn) {
+    return;
+  }
+
   if (useSplitABCheckbox.checked) {
     splitABBox.classList.remove("hidden");
     buildRankingSplitBtn.classList.remove("hidden");
@@ -3588,16 +3641,20 @@ customNetGroupsInput.addEventListener("blur", function () {
   customNetGroupsInput.value = customNetGroupsInput.value.toUpperCase();
 });
 
-addSplitRowBtn.addEventListener("click", function () {
-  createSplitRow("", "", "");
-});
+if (addSplitRowBtn) {
+  addSplitRowBtn.addEventListener("click", function () {
+    createSplitRow("", "", "");
+  });
+}
 
-splitRowsContainer.addEventListener("click", function (event) {
-  if (event.target.classList.contains("remove-split-row-btn")) {
-    const row = event.target.closest(".split-row");
+if (splitRowsContainer) {
+  splitRowsContainer.addEventListener("click", function (event) {
+    if (event.target.classList.contains("remove-split-row-btn")) {
+      const row = event.target.closest(".split-row");
 
-    if (row) {
-      row.remove();
+      if (row) {
+        row.remove();
+      }
     }
-  }
-});
+  });
+}
