@@ -814,7 +814,33 @@ function buildRankingSplitSetup() {
     return;
   }
 
+  const splitRows = useSplitABCheckbox.checked
+    ? getSplitRowsFromInput()
+    : [];
+
+  if (useSplitABCheckbox.checked && splitRows.length === 0) {
+    alert("Please add at least one Split Row first.");
+    return;
+  }
+
   const rows = items.map((item, index) => {
+    const splitOptions = splitRows.map((splitRow, splitIndex) => {
+      const suffixValue = String(splitIndex + 1);
+      const labelText =
+        splitRow.label +
+        " - " +
+        splitRow.variable +
+        " (" +
+        splitRow.code +
+        ")";
+
+      return `
+        <option value="${suffixValue}" ${item.splitSuffix === suffixValue ? "selected" : ""}>
+          ${labelText}
+        </option>
+      `;
+    }).join("");
+
     return `
       <tr>
         <td>${item.questionCode}</td>
@@ -822,8 +848,7 @@ function buildRankingSplitSetup() {
         <td>
           <select class="ranking-split-select" data-index="${index}">
             <option value="">Blank</option>
-            <option value="1" ${item.splitSuffix === "1" ? "selected" : ""}>1</option>
-            <option value="2" ${item.splitSuffix === "2" ? "selected" : ""}>2</option>
+            ${splitOptions}
           </select>
         </td>
       </tr>
@@ -836,7 +861,7 @@ function buildRankingSplitSetup() {
         <tr>
           <th>Question Code</th>
           <th>Code Label</th>
-          <th>Split Code</th>
+          <th>Split Row</th>
         </tr>
       </thead>
       <tbody>
@@ -2841,37 +2866,57 @@ if (table.questionType === "summary_table") {
   rankingSplitTableContainer.innerHTML = "";
 
   if (table.rankingItems && table.rankingItems.length > 0) {
-    const rows = table.rankingItems.map((item, index) => {
+  const splitRows = table.splitRows && table.splitRows.length
+    ? table.splitRows
+    : getSplitRowsFromInput();
+
+  const rows = table.rankingItems.map((item, index) => {
+    const splitOptions = splitRows.map((splitRow, splitIndex) => {
+      const suffixValue = String(splitIndex + 1);
+      const labelText =
+        splitRow.label +
+        " - " +
+        splitRow.variable +
+        " (" +
+        splitRow.code +
+        ")";
+
       return `
-        <tr>
-          <td>${item.questionCode}</td>
-          <td>${item.label}</td>
-          <td>
-            <select class="ranking-split-select" data-index="${index}">
-              <option value="">Blank</option>
-              <option value="1" ${item.splitSuffix === "1" ? "selected" : ""}>1</option>
-              <option value="2" ${item.splitSuffix === "2" ? "selected" : ""}>2</option>
-            </select>
-          </td>
-        </tr>
+        <option value="${suffixValue}" ${item.splitSuffix === suffixValue ? "selected" : ""}>
+          ${labelText}
+        </option>
       `;
     }).join("");
 
-    rankingSplitTableContainer.innerHTML = `
-      <table class="ranking-split-table">
-        <thead>
-          <tr>
-            <th>Question Code</th>
-            <th>Code Label</th>
-            <th>Split Code</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows}
-        </tbody>
-      </table>
+    return `
+      <tr>
+        <td>${item.questionCode}</td>
+        <td>${item.label}</td>
+        <td>
+          <select class="ranking-split-select" data-index="${index}">
+            <option value="">Blank</option>
+            ${splitOptions}
+          </select>
+        </td>
+      </tr>
     `;
-  }
+  }).join("");
+
+  rankingSplitTableContainer.innerHTML = `
+    <table class="ranking-split-table">
+      <thead>
+        <tr>
+          <th>Question Code</th>
+          <th>Code Label</th>
+          <th>Split Row</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>
+  `;
+}
 
 } else {
   rowTypeSelect.value = table.rowType;
