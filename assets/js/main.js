@@ -291,6 +291,8 @@ const demographicTemplates = {
 
 let tables = [];
 let editingIndex = null;
+let editingArrayGroupId = null;
+let editingArrayGroupStartIndex = null;
 
 const projectTypeSelect = document.getElementById("projectType");
 const questionCodeInput = document.getElementById("questionCode");
@@ -2495,14 +2497,41 @@ function addTable() {
 
   if (!newTables) return;
 
-  if (editingIndex !== null) {
+  if (editingArrayGroupId !== null) {
+    const groupId = editingArrayGroupId;
+
+    const groupIndexes = tables
+      .map((table, index) => {
+        return { table, index };
+      })
+      .filter(item => {
+        return item.table.questionType === "array" && item.table.arrayGroupId === groupId;
+      })
+      .map(item => item.index);
+
+    const startIndex =
+      groupIndexes.length > 0
+        ? Math.min(...groupIndexes)
+        : editingArrayGroupStartIndex || 0;
+
+    const updatedTables = newTables.map((table, index) => {
+      return {
+        ...table,
+        arrayGroupId: groupId,
+        arrayPosition: index
+      };
+    });
+
+    tables = tables.filter(table => {
+      return !(table.questionType === "array" && table.arrayGroupId === groupId);
+    });
+
+    tables.splice(startIndex, 0, ...updatedTables);
+
+    exitEditMode();
+  } else if (editingIndex !== null) {
     const updatedTable = newTables[0];
 
-    /*
-      Nếu table cũ là một phần của array group,
-      thì table mới sau khi edit phải giữ arrayGroupId và arrayPosition cũ.
-      Như vậy Q2/Q3 vẫn output USE=firstIndex, Q2/Q3 thay vì full rows.
-    */
     if (
       oldEditingTable &&
       oldEditingTable.questionType === "array" &&
@@ -2536,8 +2565,156 @@ function getFirstArrayTableIndex(table) {
   return firstIndex + 1;
 }
 
+function getArrayGroupTables(groupId) {
+  return tables
+    .map((table, index) => {
+      return { table, index };
+    })
+    .filter(item => {
+      return item.table.questionType === "array" && item.table.arrayGroupId === groupId;
+    })
+    .sort((a, b) => {
+      return (a.table.arrayPosition || 0) - (b.table.arrayPosition || 0);
+    });
+}
+
+function compressQuestionCodesToRange(questionCodes) {
+  if (!questionCodes || questionCodes.length === 0) {
+    return "";
+  }
+
+  if (questionCodes.length === 1) {
+    return questionCodes[0];
+  }
+
+  const first = questionCodes[0];
+  const last = questionCodes[questionCodes.length - 1];
+
+  const firstMatch = first.match(/^([A-Z]+)(\d+)$/i);
+  const lastMatch = last.match(/^([A-Z]+)(\d+)$/i);
+
+  if (!firstMatch || !lastMatch) {
+    return questionCodes.join(",");
+  }
+
+  const firstPrefix = firstMatch[1].toUpperCase();
+  const lastPrefix = lastMatch[1].toUpperCase();
+
+  if (firstPrefix !== lastPrefix) {
+    return questionCodes.join(",");
+  }
+
+  return first + ":" + lastMatch[2];
+}
+
+function editArrayGroup(index) {
+  const clickedTable = tables[index];
+
+  if (!clickedTable || !clickedTable.arrayGroupId) {
+    return;
+  }
+
+  const groupItems = getArrayGroupTables(clickedTable.arrayGroupId);
+
+  if (groupItems.length === 0) {
+    return;
+  }
+
+  const groupTables = groupItems.map(item => item.table);
+  const firstTable = groupTables[0];
+
+  editingIndex = groupItems[0].index;
+  editingArrayGroupId = clickedTable.arrayGroupId;
+  editingArrayGroupStartIndex = groupItems[0].index;
+
+  const questionCodes = groupTables.map(table => table.questionCode);
+
+  projectTypeSelect.value = firstTable.projectType || "N2";
+  questionCodeInput.value = compressQuestionCodesToRange(questionCodes);
+  questionTypeSelect.value = "array";
+  questionTextInput.value = firstTable.questionText || "";
+
+  populateRowTypeOptions(normalRowTypeOptions, firstTable.rowType || "");
+  rowTypeSelect.value = firstTable.rowType || "";
+
+  baseTypeSelect.value = firstTable.baseType || "total_sample";
+  askedBaseTextInput.value = groupTables
+    .map(table => table.askedBaseText || "")
+    .filter(value => value !== "")
+    .join(",");
+
+  useSTCheckbox.checked = !!firstTable.useST;
+  useDSCheckbox.checked = firstTable.useDS !== false;
+
+  subtitleOnlyInput.value = groupTables
+    .map(table => table.subtitleOnly || "")
+    .join("\n");
+
+  manualUseIndexInput.value = firstTable.manualUseIndex || "";
+  answerOptionsInput.value = firstTable.answerOptions || "";
+
+  customNetGroupsInput.value = firstTable.customNetGroupsRaw || "";
+  useCustomNetGroupsCheckbox.checked = !!firstTable.customNetGroupsRaw;
+  toggleCustomNetGroupBox();
+
+  if (firstTable.customNetGroupsRaw || firstTable.answerOptions) {
+    buildCustomDSSetup();
+
+    if (firstTable.customDSPositive) {
+      customDSPositiveSelect.value = firstTable.customDSPositive;
+    }
+
+    if (firstTable.customDSNegative) {
+      customDSNegativeSelect.value = firstTable.customDSNegative;
+    }
+  } else {
+    customDSBox.classList.add("hidden");
+  }
+
+  if (firstTable.baseType === "asked_base") {
+    arraySampleExtraRowsInput.value = firstTable.arraySampleExtraRowsRaw || "";
+    useArraySampleSetupCheckbox.checked = firstTable.useArraySampleSetup !== false;
+
+    toggleAskedBaseBox();
+
+    buildArraySampleSetup();
+
+    const selects = [...arraySampleTableContainer.querySelectorAll(".array-sample-select")];
+
+    const selections = groupTables.map(table => {
+      return table.askedBaseText || "";
+    });
+
+    selects.forEach((select, i) => {
+      select.value = selections[i] || "";
+    });
+
+    closeArraySampleModal();
+  }
+
+  toggleQuestionTypeUI();
+  toggleAskedBaseBox();
+  toggleAnswerOptionsBox();
+  toggleSubtitleBox();
+  toggleUseDSBox();
+
+  addBtn.textContent = "Update Array Group";
+  cancelEditBtn.classList.remove("hidden");
+
+  renderInputList();
+}
+
 function editTable(index) {
   const table = tables[index];
+
+  if (
+    table &&
+    table.questionType === "array" &&
+    table.arrayGroupId
+  ) {
+    editArrayGroup(index);
+    return;
+  }
 
   editingIndex = index;
 
@@ -2801,8 +2978,45 @@ function cancelEdit() {
 
 function exitEditMode() {
   editingIndex = null;
+  editingArrayGroupId = null;
+  editingArrayGroupStartIndex = null;
+
   addBtn.textContent = "Add Table";
   cancelEditBtn.classList.add("hidden");
+}
+
+function getArrayGroupDisplayInfo(groupItems) {
+  const groupTables = groupItems.map(item => item.table);
+  const firstTable = groupTables[0];
+
+  const questionCodes = groupTables.map(table => table.questionCode);
+  const questionCodeRange = compressQuestionCodesToRange(questionCodes);
+
+  const bases = groupTables
+    .map(table => table.askedBaseText || "TOTAL SAMPLE")
+    .filter((value, index, array) => array.indexOf(value) === index)
+    .join(", ");
+
+  return {
+    firstTable,
+    questionCodeRange,
+    count: groupTables.length,
+    bases
+  };
+}
+
+function deleteArrayGroup(groupId) {
+  tables = tables.filter(table => {
+    return !(table.questionType === "array" && table.arrayGroupId === groupId);
+  });
+
+  if (editingArrayGroupId === groupId) {
+    exitEditMode();
+    clearInputFields();
+  }
+
+  renderInputList();
+  generateOutput();
 }
 
 function renderInputList() {
@@ -2813,7 +3027,67 @@ function renderInputList() {
     return;
   }
 
+  const renderedArrayGroups = new Set();
+
   tables.forEach((table, arrayIndex) => {
+    /*
+      Nếu là array group thì chỉ render 1 khung đại diện.
+      Các table con cùng arrayGroupId sẽ bị skip.
+    */
+    if (table.questionType === "array" && table.arrayGroupId) {
+      if (renderedArrayGroups.has(table.arrayGroupId)) {
+        return;
+      }
+
+      renderedArrayGroups.add(table.arrayGroupId);
+
+      const groupItems = getArrayGroupTables(table.arrayGroupId);
+
+      if (groupItems.length === 0) {
+        return;
+      }
+
+      const info = getArrayGroupDisplayInfo(groupItems);
+      const firstIndex = groupItems[0].index;
+      const lastIndex = groupItems[groupItems.length - 1].index;
+
+      const item = document.createElement("div");
+      item.className = "input-item";
+
+      if (editingArrayGroupId === table.arrayGroupId) {
+        item.classList.add("editing-note");
+      }
+
+      item.innerHTML = `
+        <div>
+          <div class="input-title">
+            <span class="badge">${firstIndex + 1}-${lastIndex + 1}</span>
+            ARRAY GROUP: ${info.questionCodeRange}
+          </div>
+
+          <div class="input-meta">
+            Project Setting: ${info.firstTable.projectType || "N2"}<br>
+            Question Code Range: ${info.questionCodeRange}<br>
+            Question Type: array<br>
+            Row Type: ${info.firstTable.rowType || "No row type"}<br>
+            Tables in Group: ${info.count}<br>
+            Base: ${info.bases || "TOTAL SAMPLE"}
+          </div>
+        </div>
+
+        <div class="item-actions">
+          <button class="secondary" onclick="editArrayGroup(${firstIndex})">Edit Group</button>
+          <button class="danger" onclick="deleteArrayGroup('${table.arrayGroupId}')">Delete Group</button>
+        </div>
+      `;
+
+      inputList.appendChild(item);
+      return;
+    }
+
+    /*
+      Non-array tables vẫn render bình thường.
+    */
     const tableIndex = arrayIndex + 1;
     const questionCodeLine = buildQuestionCodeLine(table.questionCode, tableIndex);
     const tableOptions = buildTableOptions(table.questionType, table.useST, table.projectType);
