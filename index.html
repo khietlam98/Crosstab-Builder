@@ -205,7 +205,7 @@ SAMPLE E"></textarea>
           </div>
         </div>
 
-        <div id="rankingSetupPanel" class="summary-box hidden">
+    <div id="rankingSetupPanel" class="summary-box hidden">
   <h3>Ranking Table Setup</h3>
 
   <div class="form-group">
@@ -218,38 +218,57 @@ SAMPLE E"></textarea>
 
   <div class="checkbox-row">
     <input id="useSplitAB" type="checkbox" />
-    <label for="useSplitAB">Add SplitAB rows</label>
+    <label for="useSplitAB">Add Rows</label>
   </div>
 
   <div id="splitABBox" class="form-group hidden">
-    <label>SplitAB Setup</label>
+  <label>Split Rows Setup</label>
 
-    <div class="mini-grid">
-      <input id="splitVariable" type="text" value="SplitAB" placeholder="Split variable" />
-      <input id="splitACode" type="text" value="1" placeholder="A code" />
-      <input id="splitBCode" type="text" value="2" placeholder="B code" />
-      <input id="splitOptions" type="text" value="HR,SX" placeholder="Options" />
+  <div class="split-rows-header">
+    <div>Label</div>
+    <div>Logic</div>
+    <div>Code</div>
+    <div></div>
+  </div>
+
+  <div id="splitRowsContainer" class="split-rows-container">
+    <div class="split-row">
+      <input class="split-row-label" type="text" value="A" placeholder="A" />
+      <input class="split-row-variable" type="text" value="SplitAB" placeholder="SplitAB / CITY OF CRAIG ONLY" />
+      <input class="split-row-code" type="text" value="1" placeholder="1" />
+      <button type="button" class="remove-split-row-btn secondary">×</button>
     </div>
 
-    <small>Output mặc định: A^ SplitAB (1) ^HR,SX và B^ SplitAB (2) ^HR,SX.</small>
-      </div>
-
-      <div class="form-group">
-        <label for="rankingItemsInput">Ranking Items</label>
-        <textarea id="rankingItemsInput" class="summary-raw" placeholder="6 IMPROVING STREETS
-    7 INCREASING SAFETY FOR DRIVERS
-    8 INCREASING SAFETY FOR DRIVERS & PEDS"></textarea>
-        <small>Có thể paste dạng: 7 | INCREASING SAFETY FOR DRIVERS | 1</small>
-      </div>
-
-      <div class="summary-preview-actions">
-        <button id="buildRankingSplitBtn" type="button" class="secondary hidden">
-          Build Split Code Setup
-        </button>
-      </small>Mặc định app luôn output LANDLINE, CELL, TEXT, EMAIL. Nhập thêm nếu cần.</small>
-      </div>
+    <div class="split-row">
+      <input class="split-row-label" type="text" value="B" placeholder="B" />
+      <input class="split-row-variable" type="text" value="SplitAB" placeholder="SplitAB / CITY OF CRAIG ONLY" />
+      <input class="split-row-code" type="text" value="2" placeholder="2" />
+      <button type="button" class="remove-split-row-btn secondary">×</button>
     </div>
+  </div>
 
+  <button id="addSplitRowBtn" type="button" class="secondary small-btn">
+    + Add Split Row
+  </button>
+
+  <small>HR,SX luôn được add mặc định. Có thể nhập code dạng 1, 2, 1-2, 3-4.</small>
+</div>
+
+  <div class="form-group">
+    <label for="rankingItemsInput">Ranking Items</label>
+    <textarea id="rankingItemsInput" class="summary-raw" placeholder="6 IMPROVING STREETS
+7 INCREASING SAFETY FOR DRIVERS
+8 INCREASING SAFETY FOR DRIVERS & PEDS"></textarea>
+    <small>Có thể paste dạng: 7 | INCREASING SAFETY FOR DRIVERS | 1</small>
+  </div>
+
+  <div class="summary-preview-actions">
+    <button id="buildRankingSplitBtn" type="button" class="secondary hidden">
+      Build Split Code Setup
+    </button>
+  </div>
+</div>
+        
     <div id="demographicSetupPanel" class="summary-box hidden">
       <h3>Demographic Setup</h3>
 

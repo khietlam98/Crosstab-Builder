@@ -355,10 +355,8 @@ const rankingItemsInput = document.getElementById("rankingItemsInput");
 
 const useSplitABCheckbox = document.getElementById("useSplitAB");
 const splitABBox = document.getElementById("splitABBox");
-const splitVariableInput = document.getElementById("splitVariable");
-const splitACodeInput = document.getElementById("splitACode");
-const splitBCodeInput = document.getElementById("splitBCode");
-const splitOptionsInput = document.getElementById("splitOptions");
+const splitRowsContainer = document.getElementById("splitRowsContainer");
+const addSplitRowBtn = document.getElementById("addSplitRowBtn");
 
 const listoutSetupPanel = document.getElementById("listoutSetupPanel");
 const listoutManualSectionsInput = document.getElementById("listoutManualSections");
@@ -414,24 +412,122 @@ function getArrayItemLabels(questionCodes) {
   });
 }
 
+function createSplitRow(label = "", variable = "", code = "") {
+  if (!splitRowsContainer) {
+    return;
+  }
+
+  const row = document.createElement("div");
+  row.className = "split-row";
+
+  row.innerHTML = `
+    <input class="split-row-label" type="text" value="${label}" placeholder="Label" />
+    <input class="split-row-variable" type="text" value="${variable}" placeholder="Logic" />
+    <input class="split-row-code" type="text" value="${code}" placeholder="Code" />
+    <button type="button" class="remove-split-row-btn secondary">×</button>
+  `;
+
+  splitRowsContainer.appendChild(row);
+}
+
+function resetSplitRows() {
+  if (!splitRowsContainer) {
+    return;
+  }
+
+  splitRowsContainer.innerHTML = "";
+  createSplitRow("A", "SplitAB", "1");
+  createSplitRow("B", "SplitAB", "2");
+}
+
+function getSplitRowsFromInput() {
+  const rows = [...splitRowsContainer.querySelectorAll(".split-row")];
+
+  return rows.map(row => {
+    const label = row.querySelector(".split-row-label").value.trim();
+    const variable = row.querySelector(".split-row-variable").value.trim();
+    const code = row.querySelector(".split-row-code").value.trim();
+
+    return {
+      label,
+      variable,
+      code,
+      options: "HR,SX"
+    };
+  }).filter(row => row.label && row.variable && row.code);
+}
+
+function loadSplitRowsToInput(splitRows) {
+  splitRowsContainer.innerHTML = "";
+
+  if (!splitRows || splitRows.length === 0) {
+    resetSplitRows();
+    return;
+  }
+
+  splitRows.forEach(row => {
+    createSplitRow(row.label || "", row.variable || "", row.code || "");
+  });
+}
+
 function parseRankingMetrics(text) {
-  const lines = text
+  const lines = String(text || "")
     .split("\n")
     .map(line => line.trim())
     .filter(line => line !== "");
 
   return lines.map(line => {
-    const match = line.match(/^(.*?)\s*\(:\s*([^)]+)\s*\)\s*$/);
+    /*
+      Supported:
+      % EXT IMPT (:1)
+      % EXT/VERY IMPT (:1-2)
+      % TOT IMPT (:1-3)
+
+      Also supports:
+      % EXT IMPT | 1
+      % EXT/VERY IMPT | 1-2
+    */
+
+    if (line.includes("|")) {
+      const parts = line.split("|").map(part => part.trim());
+
+      if (parts.length < 2) {
+        return null;
+      }
+
+      return {
+        label: normalizeRankingMetricLabel(parts[0]),
+        code: normalizeRankingMetricCode(parts[1])
+      };
+    }
+
+    const match = line.match(/^(.*?)\s*\(\s*:?\s*([0-9,\-]+)\s*\)\s*$/);
 
     if (!match) {
       return null;
     }
 
     return {
-      label: match[1].trim(),
-      code: match[2].trim()
+      label: normalizeRankingMetricLabel(match[1]),
+      code: normalizeRankingMetricCode(match[2])
     };
-  }).filter(item => item !== null);
+  }).filter(item => {
+    return item !== null && item.label !== "" && item.code !== "";
+  });
+}
+
+function normalizeRankingMetricLabel(label) {
+  return String(label || "")
+    .replace(/^RANKED\s+BY\s+/i, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+}
+
+function normalizeRankingMetricCode(code) {
+  return String(code || "")
+    .replace(/^:/, "")
+    .trim();
 }
 
 const normalRowTypeOptions = [
@@ -511,23 +607,11 @@ function closePlusSection(button, box, openText) {
 function toggleUseDSBox() {
   const isCustomCode = normalizeRowType(rowTypeSelect.value) === "custom_code";
   const isMultipleChoice = questionTypeSelect.value === "multiple_choice";
+
   const isSummaryOrRanking =
     questionTypeSelect.value === "summary_table" ||
-    questionTypeSelect.value === "ranking_table";
-
-  if (isCustomCode || isMultipleChoice || isSummaryOrRanking) {
-    useDSBox.classList.add("hidden");
-  } else {
-    useDSBox.classList.remove("hidden");
-  }
-}
-
-function toggleUseDSBox() {
-  const isCustomCode = normalizeRowType(rowTypeSelect.value) === "custom_code";
-  const isMultipleChoice = questionTypeSelect.value === "multiple_choice";
-  const isSummaryOrRanking =
-    questionTypeSelect.value === "summary_table" ||
-    questionTypeSelect.value === "ranking_table";
+    questionTypeSelect.value === "ranking_table" ||
+    questionTypeSelect.value === "listout_table";
 
   if (isCustomCode || isMultipleChoice || isSummaryOrRanking) {
     useDSBox.classList.add("hidden");
@@ -548,11 +632,14 @@ function toggleCustomNetGroupBox() {
 function toggleAnswerOptionsBox() {
   const isCustomCode = normalizeRowType(rowTypeSelect.value) === "custom_code";
   const isMultipleChoice = questionTypeSelect.value === "multiple_choice";
+  const isArray = questionTypeSelect.value === "array";
+
   const isSummaryOrRanking =
     questionTypeSelect.value === "summary_table" ||
-    questionTypeSelect.value === "ranking_table";
+    questionTypeSelect.value === "ranking_table" ||
+    questionTypeSelect.value === "listout_table";
 
-  if ((isCustomCode || isMultipleChoice) && !isSummaryOrRanking) {
+  if ((isCustomCode || isMultipleChoice || isArray) && !isSummaryOrRanking) {
     answerOptionsBox.classList.remove("hidden");
   } else {
     answerOptionsBox.classList.add("hidden");
@@ -729,7 +816,33 @@ function buildRankingSplitSetup() {
     return;
   }
 
+  const splitRows = useSplitABCheckbox.checked
+    ? getSplitRowsFromInput()
+    : [];
+
+  if (useSplitABCheckbox.checked && splitRows.length === 0) {
+    alert("Please add at least one Split Row first.");
+    return;
+  }
+
   const rows = items.map((item, index) => {
+    const splitOptions = splitRows.map((splitRow, splitIndex) => {
+      const suffixValue = String(splitIndex + 1);
+      const labelText =
+        splitRow.label +
+        " - " +
+        splitRow.variable +
+        " (" +
+        splitRow.code +
+        ")";
+
+      return `
+        <option value="${suffixValue}" ${item.splitSuffix === suffixValue ? "selected" : ""}>
+          ${labelText}
+        </option>
+      `;
+    }).join("");
+
     return `
       <tr>
         <td>${item.questionCode}</td>
@@ -737,8 +850,7 @@ function buildRankingSplitSetup() {
         <td>
           <select class="ranking-split-select" data-index="${index}">
             <option value="">Blank</option>
-            <option value="1" ${item.splitSuffix === "1" ? "selected" : ""}>1</option>
-            <option value="2" ${item.splitSuffix === "2" ? "selected" : ""}>2</option>
+            ${splitOptions}
           </select>
         </td>
       </tr>
@@ -751,7 +863,7 @@ function buildRankingSplitSetup() {
         <tr>
           <th>Question Code</th>
           <th>Code Label</th>
-          <th>Split Code</th>
+          <th>Split Row</th>
         </tr>
       </thead>
       <tbody>
@@ -786,15 +898,24 @@ function buildSplitABLines(table) {
     return [];
   }
 
-  const splitVar = table.splitVariable || "SplitAB";
-  const splitA = table.splitACode || "1";
-  const splitB = table.splitBCode || "2";
-  const splitOptions = table.splitOptions || "HR,SX";
+  const splitRows = table.splitRows && table.splitRows.length
+    ? table.splitRows
+    : [
+        { label: "A", variable: "SplitAB", code: "1", options: "HR,SX" },
+        { label: "B", variable: "SplitAB", code: "2", options: "HR,SX" }
+      ];
 
-  return [
-    " A^ " + splitVar + " (" + splitA + ") ^" + splitOptions,
-    " B^ " + splitVar + " (" + splitB + ") ^" + splitOptions
-  ];
+  return splitRows.map(row => {
+    return (
+      " " +
+      row.label +
+      "^ " +
+      row.variable +
+      " (" +
+      row.code +
+      ") ^HR,SX"
+    );
+  });
 }
 
 function buildRankingTableLines(table) {
@@ -2203,10 +2324,7 @@ if (
         rankingItems,
 
         useSplitAB: useSplitABCheckbox.checked,
-        splitVariable: splitVariableInput.value.trim() || "SplitAB",
-        splitACode: splitACodeInput.value.trim() || "1",
-        splitBCode: splitBCodeInput.value.trim() || "2",
-        splitOptions: splitOptionsInput.value.trim() || "HR,SX",
+        splitRows: getSplitRowsFromInput(),
 
         summaryRaw: "",
         summaryBlocks: [],
@@ -2458,9 +2576,40 @@ return questionCodes.map((code, index) => {
 }
 
 function buildRankingTitle(baseTitle, metricLabel) {
-  const cleanBaseTitle = baseTitle.trim();
-  const cleanMetricLabel = metricLabel.trim().toUpperCase();
+  let cleanBaseTitle = String(baseTitle || "")
+    .replace(/\s+/g, " ")
+    .trim();
 
+  const cleanMetricLabel = normalizeRankingMetricLabel(metricLabel);
+
+  /*
+    Nếu user lỡ nhập sẵn metric trong Question Text,
+    app sẽ cố gắng cắt bớt để tránh duplicate.
+    Ví dụ:
+    SUMMARY OF FUNDING ITEMS: RANKED BY % EXT/VERY IMPT
+    → SUMMARY OF FUNDING ITEMS: RANKED BY
+  */
+  cleanBaseTitle = cleanBaseTitle
+    .replace(/\s*%+\s*EXT\/VERY\s+IMPT.*$/i, "")
+    .replace(/\s*%+\s*EXT\s+IMPT.*$/i, "")
+    .replace(/\s*%+\s*TOT\s+IMPT.*$/i, "")
+    .trim();
+
+  if (!cleanBaseTitle) {
+    return cleanMetricLabel;
+  }
+
+  /*
+    Nếu title đã kết thúc bằng "RANKED BY",
+    nối trực tiếp metric vào sau.
+  */
+  if (/RANKED\s+BY$/i.test(cleanBaseTitle)) {
+    return cleanBaseTitle + " " + cleanMetricLabel;
+  }
+
+  /*
+    Nếu title kết thúc bằng dấu ":" thì nối space + metric.
+  */
   if (cleanBaseTitle.endsWith(":")) {
     return cleanBaseTitle + " " + cleanMetricLabel;
   }
@@ -2884,49 +3033,67 @@ if (table.questionType === "summary_table") {
 } else if (table.questionType === "ranking_table") {
   rankingMetricDefinitionsInput.value = table.rankingMetricDefinitions || "";
   rankingItemsInput.value = table.rankingItemsRaw || "";
+  useSplitABCheckbox.checked = !!table.useSplitAB;
 
-  useSplitABCheckbox.checked = table.useSplitAB || false;
-  splitVariableInput.value = table.splitVariable || "SplitAB";
-  splitACodeInput.value = table.splitACode || "1";
-  splitBCodeInput.value = table.splitBCode || "2";
-  splitOptionsInput.value = table.splitOptions || "HR,SX";
+  loadSplitRowsToInput(table.splitRows || []);
+
 
   toggleSplitABBox();
 
   rankingSplitTableContainer.innerHTML = "";
 
   if (table.rankingItems && table.rankingItems.length > 0) {
-    const rows = table.rankingItems.map((item, index) => {
+  const splitRows = table.splitRows && table.splitRows.length
+    ? table.splitRows
+    : getSplitRowsFromInput();
+
+  const rows = table.rankingItems.map((item, index) => {
+    const splitOptions = splitRows.map((splitRow, splitIndex) => {
+      const suffixValue = String(splitIndex + 1);
+      const labelText =
+        splitRow.label +
+        " - " +
+        splitRow.variable +
+        " (" +
+        splitRow.code +
+        ")";
+
       return `
-        <tr>
-          <td>${item.questionCode}</td>
-          <td>${item.label}</td>
-          <td>
-            <select class="ranking-split-select" data-index="${index}">
-              <option value="">Blank</option>
-              <option value="1" ${item.splitSuffix === "1" ? "selected" : ""}>1</option>
-              <option value="2" ${item.splitSuffix === "2" ? "selected" : ""}>2</option>
-            </select>
-          </td>
-        </tr>
+        <option value="${suffixValue}" ${item.splitSuffix === suffixValue ? "selected" : ""}>
+          ${labelText}
+        </option>
       `;
     }).join("");
 
-    rankingSplitTableContainer.innerHTML = `
-      <table class="ranking-split-table">
-        <thead>
-          <tr>
-            <th>Question Code</th>
-            <th>Code Label</th>
-            <th>Split Code</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows}
-        </tbody>
-      </table>
+    return `
+      <tr>
+        <td>${item.questionCode}</td>
+        <td>${item.label}</td>
+        <td>
+          <select class="ranking-split-select" data-index="${index}">
+            <option value="">Blank</option>
+            ${splitOptions}
+          </select>
+        </td>
+      </tr>
     `;
-  }
+  }).join("");
+
+  rankingSplitTableContainer.innerHTML = `
+    <table class="ranking-split-table">
+      <thead>
+        <tr>
+          <th>Question Code</th>
+          <th>Code Label</th>
+          <th>Split Row</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>
+  `;
+}
 
 } else {
   rowTypeSelect.value = table.rowType;
@@ -3251,75 +3418,113 @@ function generateOutput() {
   output.textContent = blocks.join("\n");
 }
 
+function safeSetValue(element, value) {
+  if (element) {
+    element.value = value;
+  }
+}
+
+function safeSetChecked(element, value) {
+  if (element) {
+    element.checked = value;
+  }
+}
+
+function safeAddHidden(element) {
+  if (element) {
+    element.classList.add("hidden");
+  }
+}
+
+function safeClearHTML(element) {
+  if (element) {
+    element.innerHTML = "";
+  }
+}
+
 function clearInputFields() {
   projectTypeSelect.value = "N2";
-  questionCodeInput.value = "";
-  questionTypeSelect.value = "";
-  rowTypeSelect.value = "";
-  questionTextInput.value = "";
-  demographicAdditionalCodesInput.value = "";
+
+  safeSetValue(questionCodeInput, "");
+  safeSetValue(questionTypeSelect, "");
+  safeSetValue(rowTypeSelect, "");
+  safeSetValue(questionTextInput, "");
 
   populateRowTypeOptions(normalRowTypeOptions, "");
 
-  answerOptionsInput.value = "";
-  customNetGroupsInput.value = "";
-  customDSPositiveSelect.innerHTML = "";
-  customDSNegativeSelect.innerHTML = "";
-  customDSBox.classList.add("hidden");
-
-  useSTCheckbox.checked = false;
-  useDSCheckbox.checked = true;
-  subtitleOnlyInput.value = "";
-  manualUseIndexInput.value = "";
-
-  useCustomNetGroupsCheckbox.checked = false;
-  customNetGroupsInput.value = "";
-  customDSPositiveSelect.innerHTML = "";
-  customDSNegativeSelect.innerHTML = "";
-  customDSBox.classList.add("hidden");
+  safeSetValue(answerOptionsInput, "");
+  safeSetChecked(useCustomNetGroupsCheckbox, false);
+  safeSetValue(customNetGroupsInput, "");
+  safeClearHTML(customDSPositiveSelect);
+  safeClearHTML(customDSNegativeSelect);
+  safeAddHidden(customDSBox);
   toggleCustomNetGroupBox();
 
- arraySampleExtraRowsInput.value = "";
-  arraySampleTableContainer.innerHTML = "";
-  arraySampleModal.classList.add("hidden");
+  safeSetChecked(useSTCheckbox, false);
+  safeSetChecked(useDSCheckbox, true);
+  safeSetValue(subtitleOnlyInput, "");
+  safeSetValue(manualUseIndexInput, "");
 
-  listoutManualSectionsInput.value = "";
+  safeSetValue(baseTypeSelect, "total_sample");
+  safeSetValue(askedBaseTextInput, "");
+  safeSetValue(arraySampleExtraRowsInput, "");
+  safeClearHTML(arraySampleTableContainer);
+  safeAddHidden(arraySampleModal);
 
-  includeVersionSectionCheckbox.checked = true;
-  versionExtraRowsInput.value = "";
+  safeSetValue(demographicAdditionalCodesInput, "");
 
-  includeModeSectionCheckbox.checked = true;
-  modeExtraRowsInput.value = "";
+  safeSetValue(listoutManualSectionsInput, "");
 
-  includeDateSectionCheckbox.checked = true;
-  dateVariableInput.value = "submitdate";
-  startDateInput.value = "";
-  endDateInput.value = "";
+  safeSetChecked(includeVersionSectionCheckbox, true);
+  safeSetValue(versionExtraRowsInput, "");
 
-  closePlusSection(toggleVersionExtraBtn, versionExtraBox, "+ Add VERSION Extra Rows");
-  closePlusSection(toggleModeExtraBtn, modeExtraBox, "+ Add MODE Extra Rows");
-  closePlusSection(toggleDateSetupBtn, dateSetupBox, "+ Add DATE Range");
+  safeSetChecked(includeModeSectionCheckbox, true);
+  safeSetValue(modeExtraRowsInput, "");
 
-  baseTypeSelect.value = "total_sample";
-  askedBaseTextInput.value = "";
+  safeSetChecked(includeDateSectionCheckbox, true);
+  safeSetValue(dateVariableInput, "submitdate");
+  safeSetValue(startDateInput, "");
+  safeSetValue(endDateInput, "");
 
-  rankingMetricDefinitionsInput.value = "";
-  rankingItemsInput.value = "";
-  useSplitABCheckbox.checked = false;
-  splitVariableInput.value = "SplitAB";
-  splitACodeInput.value = "1";
-  splitBCodeInput.value = "2";
-  splitOptionsInput.value = "HR,SX";
-  rankingSplitTableContainer.innerHTML = "";
-  closeRankingSplitModal();
+  if (toggleVersionExtraBtn && versionExtraBox) {
+    closePlusSection(toggleVersionExtraBtn, versionExtraBox, "+ Add VERSION Extra Rows");
+  }
+
+  if (toggleModeExtraBtn && modeExtraBox) {
+    closePlusSection(toggleModeExtraBtn, modeExtraBox, "+ Add MODE Extra Rows");
+  }
+
+  if (toggleDateSetupBtn && dateSetupBox) {
+    closePlusSection(toggleDateSetupBtn, dateSetupBox, "+ Add DATE Range");
+  }
+
+  safeSetValue(rankingMetricDefinitionsInput, "");
+  safeSetValue(rankingItemsInput, "");
+  safeSetChecked(useSplitABCheckbox, false);
+
+  if (splitRowsContainer) {
+    resetSplitRows();
+  }
+
+  safeClearHTML(rankingSplitTableContainer);
+
+  if (rankingSplitModal) {
+    closeRankingSplitModal();
+  }
+
   toggleSplitABBox();
 
-  summaryRawInput.value = "";
-  summaryBlockCountInput.value = "";
-  summaryBlockSetupContainer.innerHTML = "";
+  safeSetValue(summaryRawInput, "");
+  safeSetValue(summaryBlockCountInput, "");
+  safeClearHTML(summaryBlockSetupContainer);
 
-  openSummaryModalBtn.classList.add("hidden");
-  closeSummaryModal();
+  if (openSummaryModalBtn) {
+    openSummaryModalBtn.classList.add("hidden");
+  }
+
+  if (summaryModal) {
+    closeSummaryModal();
+  }
 
   toggleQuestionTypeUI();
   toggleAnswerOptionsBox();
@@ -3479,6 +3684,10 @@ function toggleArraySampleSetupBox() {
 }
 
 function toggleSplitABBox() {
+  if (!useSplitABCheckbox || !splitABBox || !buildRankingSplitBtn) {
+    return;
+  }
+
   if (useSplitABCheckbox.checked) {
     splitABBox.classList.remove("hidden");
     buildRankingSplitBtn.classList.remove("hidden");
@@ -3696,6 +3905,10 @@ toggleAskedBaseBox();
 toggleAnswerOptionsBox();
 toggleCustomNetGroupBox();
 
+if (splitRowsContainer && splitRowsContainer.children.length === 0) {
+  resetSplitRows();
+}
+
 toggleVersionExtraBtn.addEventListener("click", function () {
   togglePlusSection(
     toggleVersionExtraBtn,
@@ -3746,3 +3959,21 @@ answerOptionsInput.addEventListener("blur", function () {
 customNetGroupsInput.addEventListener("blur", function () {
   customNetGroupsInput.value = customNetGroupsInput.value.toUpperCase();
 });
+
+if (addSplitRowBtn) {
+  addSplitRowBtn.addEventListener("click", function () {
+    createSplitRow("", "", "");
+  });
+}
+
+if (splitRowsContainer) {
+  splitRowsContainer.addEventListener("click", function (event) {
+    if (event.target.classList.contains("remove-split-row-btn")) {
+      const row = event.target.closest(".split-row");
+
+      if (row) {
+        row.remove();
+      }
+    }
+  });
+}
