@@ -4017,11 +4017,10 @@ if (splitRowsContainer) {
 // -------------------- Region Mapping Listout Integration --------------------
 
 const regionFileInput = document.getElementById("regionFileInput"); // <input type="file">
-const regionLogicInput = document.getElementById("regionLogicVar"); // <input> để nhập Variable Name (e.g., REGION2)
+const regionLogicInput = document.getElementById("regionLogicVar");   // tên biến logic Region (VD: REGION2)
 const applyRegionMappingBtn = document.getElementById("applyRegionMapping");
 
-let regionData = []; // dữ liệu Excel
-let regionLogicVar = ""; // tên logic nhập bởi user
+let regionData = [];  // Dữ liệu Excel
 
 regionFileInput.addEventListener("change", async (e) => {
   const file = e.target.files[0];
@@ -4032,8 +4031,8 @@ regionFileInput.addEventListener("change", async (e) => {
   const sheetName = workbook.SheetNames[0];
   const sheet = workbook.Sheets[sheetName];
 
-  // Giả sử Excel có cột CODE, LABEL, REGION
-  regionData = XLSX.utils.sheet_to_json(sheet, { header: ["CODE", "LABEL", "REGION"], range: 1 });
+  // Excel giả sử có cột CODE, LABEL, REGION
+  regionData = XLSX.utils.sheet_to_json(sheet, { header: ["CODE","LABEL","REGION"], range: 1 });
 });
 
 applyRegionMappingBtn.addEventListener("click", () => {
@@ -4047,25 +4046,38 @@ applyRegionMappingBtn.addEventListener("click", () => {
   }
 
   const regionLogicVar = regionLogicInput.value.trim().toUpperCase();
-  const sections = {};
 
+  // Nhóm các precinct theo Region
+  const sections = {};
   regionData.forEach(r => {
     if (!sections[r.REGION]) sections[r.REGION] = [];
     sections[r.REGION].push({ label: r.LABEL, code: r.CODE });
   });
 
+  // Build ListoutManualSections với indent chuẩn
   let manualSectionsText = "";
   let regionCounter = 1;
-  for (const regionName of Object.keys(sections)) {
-    manualSectionsText += `${regionName.toUpperCase()}|${regionLogicVar}|${regionCounter}\n`;
-    sections[regionName].forEach(p => {
-      manualSectionsText += `   ${p.label}|${regionLogicVar}|${p.code}\n`;
-    });
-    regionCounter++;
-  }
 
+  Object.keys(sections).forEach(regionName => {
+    // Region line, giảm indent 1 tab để thẳng hàng với North example
+    manualSectionsText += `${regionName.toUpperCase()}^     ${regionLogicVar}    (${regionCounter})         ^\n`;
+
+    sections[regionName].forEach(p => {
+      // Precinct line, indent chuẩn (4 spaces)  
+      manualSectionsText += `    ${p.label}^      PRECINCT   (${p.code})         ^\n`;
+    });
+
+    regionCounter++;
+  });
+
+  // Gán vào input Listout Manual Sections hiện tại
+  const listoutManualSectionsInput = document.getElementById("listoutManualSections");
   listoutManualSectionsInput.value = manualSectionsText;
-  generateOutput();
+
+  // Gọi hàm generateOutput() của hệ thống
+  if (typeof generateOutput === "function") {
+    generateOutput();
+  }
 
   alert("Region mapping applied successfully!");
 });
