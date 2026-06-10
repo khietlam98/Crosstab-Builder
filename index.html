@@ -304,6 +304,10 @@ SPANISH | 2"></textarea>
     </small>
   </div>
 
+<input type="file" id="regionFileInput" />
+<input type="text" id="regionLogicVar" placeholder="Enter logic variable (e.g., REGION2)" />
+<button id="applyRegionMapping">Apply Mapping</button>
+
   <div class="checkbox-row">
   <input id="includeVersionSection" type="checkbox" checked />
   <label for="includeVersionSection">Include VERSION</label>
@@ -453,6 +457,11 @@ APP | modetype | 6"></textarea>
   </div>
 </div>
 
+
+
+<!-- Script SheetJS phải load **trước** main.js -->
+<script src="https://cdn.sheetjs.com/xlsx-0.19.1/package/dist/xlsx.full.min.js"></script>
   <script src="assets/js/main.js"></script>
+ 
 </body>
 </html>

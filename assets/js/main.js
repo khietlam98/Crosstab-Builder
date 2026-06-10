@@ -430,6 +430,41 @@ function createSplitRow(label = "", variable = "", code = "") {
   splitRowsContainer.appendChild(row);
 }
 
+function buildListoutSyntax(regionLogic, excelData) {
+    const listoutLines = [];
+
+    listoutLines.push("TLISTOUT_" + regionLogic + "^1");
+    listoutLines.push("OR,OV,0%,F%,BH,RV,S2,P0,V2,SA,SP");
+    listoutLines.push("LISTOUT " + regionLogic + ".");
+    listoutLines.push("BASE=TOTAL SAMPLE^TN^1");
+    listoutLines.push("SECTION^     ^L-");
+
+    const regionGroups = {};
+
+    // ExcelData = [{CODE, LABEL, REGION}]
+    excelData.forEach(row => {
+        if (!regionGroups[row.REGION]) regionGroups[row.REGION] = [];
+        regionGroups[row.REGION].push({code: row.CODE, label: row.LABEL});
+    });
+
+    let regionIndex = 1;
+    for (const regionName in regionGroups) {
+        const childRows = regionGroups[regionName];
+
+        // Group row, indent 3 spaces
+        listoutLines.push(`   ${regionName.toUpperCase()}^     ${regionLogic} (${regionIndex})         ^`);
+
+        childRows.forEach((child, i) => {
+            // Child row, indent 6 spaces
+            listoutLines.push(`      ${child.CODE}^      ^ PRECINCT (${i+1 + ((regionIndex-1)*childRows.length)})         ^`);
+        });
+
+        regionIndex++;
+    }
+
+    return listoutLines.join("\n");
+}
+
 function resetSplitRows() {
   if (!splitRowsContainer) {
     return;
@@ -1267,6 +1302,7 @@ function buildListoutVersionLines(extraRowsText) {
 
   return lines;
 }
+
 
 function buildListoutModeLines(extraRowsText) {
   const lines = [
@@ -3977,3 +4013,59 @@ if (splitRowsContainer) {
     }
   });
 }
+
+// -------------------- Region Mapping Listout Integration --------------------
+
+const regionFileInput = document.getElementById("regionFileInput"); // <input type="file">
+const regionLogicInput = document.getElementById("regionLogicVar"); // <input> để nhập Variable Name (e.g., REGION2)
+const applyRegionMappingBtn = document.getElementById("applyRegionMapping");
+
+let regionData = []; // dữ liệu Excel
+let regionLogicVar = ""; // tên logic nhập bởi user
+
+regionFileInput.addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const data = await file.arrayBuffer();
+  const workbook = XLSX.read(data, { type: "array" });
+  const sheetName = workbook.SheetNames[0];
+  const sheet = workbook.Sheets[sheetName];
+
+  // Giả sử Excel có cột CODE, LABEL, REGION
+  regionData = XLSX.utils.sheet_to_json(sheet, { header: ["CODE", "LABEL", "REGION"], range: 1 });
+});
+
+applyRegionMappingBtn.addEventListener("click", () => {
+  if (!regionLogicInput.value.trim()) {
+    alert("Enter logic variable name for Region.");
+    return;
+  }
+  if (!regionData.length) {
+    alert("Upload Excel first.");
+    return;
+  }
+
+  const regionLogicVar = regionLogicInput.value.trim().toUpperCase();
+  const sections = {};
+
+  regionData.forEach(r => {
+    if (!sections[r.REGION]) sections[r.REGION] = [];
+    sections[r.REGION].push({ label: r.LABEL, code: r.CODE });
+  });
+
+  let manualSectionsText = "";
+  let regionCounter = 1;
+  for (const regionName of Object.keys(sections)) {
+    manualSectionsText += `${regionName.toUpperCase()}|${regionLogicVar}|${regionCounter}\n`;
+    sections[regionName].forEach(p => {
+      manualSectionsText += `   ${p.label}|${regionLogicVar}|${p.code}\n`;
+    });
+    regionCounter++;
+  }
+
+  listoutManualSectionsInput.value = manualSectionsText;
+  generateOutput();
+
+  alert("Region mapping applied successfully!");
+});
