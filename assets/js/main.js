@@ -163,6 +163,18 @@ const rowTemplates = {
     " DEPENDS ON GROWTH^                           {VAR} (6) ^",
     " DON’T KNOW/UNSURE ^                          {VAR} (7) ^",
     " REFUSED ^                                    {VAR} (8) ^"
+  ],
+
+  support_oppose: [
+    " **D/S (TOT SUPPORT - TOT OPPOSE)^  CALC F2-F3,V2-V3^SX",
+    " TOTAL SUPPORT^              {VAR} (1-2) ^L-,SX",
+    " TOTAL OPPOSE^               {VAR} (3-4) ^L-,SX",
+    "   STRONGLY SUPPORT^         {VAR} (1) ^",
+    "   SOMEWHAT SUPPORT^         {VAR} (2) ^",
+    "   SOMEWHAT OPPOSE^          {VAR} (3) ^",
+    "   STRONGLY OPPOSE^          {VAR} (4) ^",
+    " DON’T KNOW ^                {VAR} (5) ^",
+    " REFUSED^                    {VAR} (6) ^"
   ]
 };
 
@@ -576,7 +588,8 @@ const normalRowTypeOptions = [
   { value: "yes_no", text: "TOT YES / TOT NO" },
   { value: "more_less_likely", text: "TOT MORE LIKELY / TOT LESS LIKELY" },
   { value: "convincing_not_convincing", text: "TOT CONVINCING / TOT NOT CONVINCING" },
-  { value: "adequate_inadequate", text: "TOT ADEQUATE / TOT INADEQUATE" }
+  { value: "adequate_inadequate", text: "TOT ADEQUATE / TOT INADEQUATE" },
+  { value: "support_oppose", text: "TOT SUPPORT / TOT OPPOSE" }
 ];
 
 const demographicRowTypeOptions = [
