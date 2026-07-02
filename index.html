@@ -21,138 +21,913 @@
       <section class="card input-card">
         <h2>Input</h2>
 
-        <div class="form-group">
-          <label for="projectType">Project Setting</label>
-          <select id="projectType">
-            <option value="N2" selected>N2</option>
-            <option value="P2">P2</option>
-            <option value="F4">F4</option>
-          </select>
-        </div>
+       <div class="form-group">
+  <div class="field-label-row">
+    <label for="projectType">
+      Project Setting
+    </label>
 
-        <div class="form-group">
-          <label for="questionType">Question Type</label>
-          <select id="questionType">
-            <option value="" selected disabled>Please select a type...</option>
-            <option value="single_choice">Single Choice</option>
-            <option value="multiple_choice">Multiple Choice</option>
-            <option value="summary_table">Summary Table</option>
-            <option value="ranking_table">Ranking Table</option>
-            <option value="array">Array</option>
-            <option value="demographic">Demographic</option>
-            <option value="listout_table">List Out Table</option>
-          </select>
-        </div>
+    <button
+      type="button"
+      class="help-tooltip"
+      aria-label="Help for Project Setting"
+    >
+      ?
 
-          <div class="form-group">
-          <label for="questionCode">Question Code / Table Code</label>
-          <input id="questionCode" type="text" placeholder="Example: Q1, Q1:5, or 1" />
-          <small>Single insert Q1, Array/ MCQ insert Q1:5</small>
-        </div>
+      <span
+        class="help-tooltip-box"
+        role="tooltip"
+      >
+        <strong>PROJECT SETTING</strong>
+
+        <span>
+          This setting controls the default Table Options and TN values used in the output.
+        </span>
+
+        <span class="help-section-title">
+          EXAMPLE
+        </span>
+
+        <span>
+          Select <code>N2</code> when the project instructions specify N2.
+        </span>
+      </span>
+    </button>
+  </div>
+
+  <select id="projectType">
+    <option value="N2" selected>N2</option>
+    <option value="P2">P2</option>
+    <option value="F4">F4</option>
+  </select>
+</div>
+
+<div class="form-group">
+  <div class="field-label-row">
+    <label for="questionType">
+      Question Type
+    </label>
+
+    <button
+      type="button"
+      class="help-tooltip"
+      aria-label="Help for Question Type"
+      aria-haspopup="true"
+    >
+      ?
+
+      <span
+        class="help-tooltip-box"
+        role="tooltip"
+      >
+        <strong>QUESTION TYPE</strong>
+
+        <span>
+          Choose the table format that matches the question structure.
+        </span>
+
+        <span class="help-section-title">
+          OPTIONS
+        </span>
+
+        <span>
+          <code>Single Choice</code> — one variable with one selected answer.
+        </span>
+
+        <span>
+          <code>Multiple Choice</code> — each answer is stored as a separate variable.
+        </span>
+
+        <span>
+          <code>Array</code> — creates related tables from a question-code range.
+        </span>
+
+        <span>
+          <code>Summary</code>, <code>Ranking</code>,
+          <code>Demographic</code> and <code>List Out</code>
+          use their own setup fields.
+        </span>
+      </span>
+    </button>
+  </div>
+
+  <select id="questionType">
+    <option value="" selected disabled>
+      Please select a type...
+    </option>
+
+    <option value="single_choice">
+      Single Choice
+    </option>
+
+    <option value="multiple_choice">
+      Multiple Choice
+    </option>
+
+    <option value="summary_table">
+      Summary Table
+    </option>
+
+    <option value="ranking_table">
+      Ranking Table
+    </option>
+
+    <option value="array">
+      Array
+    </option>
+
+    <option value="demographic">
+      Demographic
+    </option>
+
+    <option value="listout_table">
+      List Out Table
+    </option>
+  </select>
+</div>
+
+         <div class="form-group">
+  <div class="field-label-row">
+    <label for="questionCode">
+      Question Code / Table Code
+    </label>
+
+    <button
+      type="button"
+      class="help-tooltip"
+      aria-label="Help for Question Code"
+      aria-haspopup="true"
+    >
+      ?
+
+      <span
+        class="help-tooltip-box"
+        role="tooltip"
+      >
+        <strong>QUESTION CODE / TABLE CODE</strong>
+
+        <span>
+          Enter the question variable or table code used to build the output.
+        </span>
+
+        <span class="help-section-title">
+          FORMAT
+        </span>
+
+        <span>
+          <code>Q1</code> — creates one table.
+        </span>
+
+        <span>
+          <code>Q1:5</code> — creates tables from Q1 to Q5.
+        </span>
+
+        <span>
+          <code>M1:M7</code> — creates tables from M1 to M7.
+        </span>
+
+        <span>
+          <code>1</code> — creates table code T1.
+        </span>
+
+      </span>
+    </button>
+  </div>
+
+  <input
+    id="questionCode"
+    type="text"
+    placeholder="Example: Q1, Q1:5, or 1"
+  />
+</div>
         
-        <div id="rowTypeBox" class="form-group">
-          <label for="rowType">Row Type</label>
-          <select id="rowType">
-            <option value="" selected disabled>Please select a type...</option>
-            <option value="custom_code">CUSTOM CODE</option>
-            <option value="important">TOT IMPORTANT / TOT NOT IMPORTANT</option>
-            <option value="good_bad">TOT GOOD / TOT BAD</option>
-            <option value="agree_disagree">TOT AGREE / TOT DISAGREE</option>
-            <option value="accept_unaccept">TOT ACCEPT / TOT UNACCEPT</option>
-            <option value="confident_not_confident">TOT CONFIDENT / TOT NOT CONFIDENT</option>
-            <option value="yes_no">TOT YES / TOT NO</option>
-            <option value="more_less_likely">TOT MORE LIKELY / TOT LESS LIKELY</option>
-            <option value="convincing_not_convincing">TOT CONVINCING / TOT NOT CONVINCING</option>
-            <option value="adequate_inadequate">TOT ADEQUATE / TOT INADEQUATE</option>
-            <option value="su">TOT  / TOT INADEQUATE</option>
-          </select>
-        </div>
+      <div id="rowTypeBox" class="form-group">
+  <div class="field-label-row">
+    <label for="rowType">
+      Row Type
+    </label>
 
-        <div class="form-group">
-          <label for="questionText">Question Text / Summary Title</label>
-          <textarea id="questionText" placeholder="Example: What was the last level of education you completed?
-               SUMMARY OF KEY DATA"></textarea>
-        </div>
+    <button
+      type="button"
+      class="help-tooltip"
+      aria-label="Help for Row Type"
+      aria-haspopup="true"
+    >
+      ?
 
-        <div id="answerOptionsBox" class="form-group hidden">
-  <label for="answerOptions">Answer Options</label>
-  <textarea id="answerOptions" placeholder="Paste answer options here. Example:
-1	DEFINITELY YES
-2	PROBABLY YES
-3	UNDECIDED, LEAN YES"></textarea>
+      <span
+        class="help-tooltip-box"
+        role="tooltip"
+      >
+        <strong>ROW TYPE</strong>
+
+        <span>
+          Automatically creates the standard answer labels, total rows and D/S structure.
+        </span>
+
+        <span class="help-section-title">
+          CUSTOM CODE
+        </span>
+
+        <span>
+          Select <code>CUSTOM CODE</code> to paste your own answer options and codes.
+        </span>
+
+        <span class="help-section-title">
+          NOTE
+        </span>
+
+        <span>
+          Make sure the selected scale matches the wording and code order in the questionnaire.
+        </span>
+      </span>
+    </button>
+  </div>
+
+  <select id="rowType">
+    <option value="" selected disabled>
+      Please select a type...
+    </option>
+
+    <option value="custom_code">
+      CUSTOM CODE
+    </option>
+
+    <option value="important">
+      TOT IMPORTANT / TOT NOT IMPORTANT
+    </option>
+
+    <option value="good_bad">
+      TOT GOOD / TOT BAD
+    </option>
+
+    <option value="agree_disagree">
+      TOT AGREE / TOT DISAGREE
+    </option>
+
+    <option value="accept_unaccept">
+      TOT ACCEPT / TOT UNACCEPT
+    </option>
+
+    <option value="confident_not_confident">
+      TOT CONFIDENT / TOT NOT CONFIDENT
+    </option>
+
+    <option value="yes_no">
+      TOT YES / TOT NO
+    </option>
+
+    <option value="more_less_likely">
+      TOT MORE LIKELY / TOT LESS LIKELY
+    </option>
+
+    <option value="convincing_not_convincing">
+      TOT CONVINCING / TOT NOT CONVINCING
+    </option>
+
+    <option value="adequate_inadequate">
+      TOT ADEQUATE / TOT INADEQUATE
+    </option>
+
+    <option value="support_oppose">
+      TOT SUPPORT / TOT OPPOSE
+    </option>
+  </select>
+</div>
+
+       <div class="form-group">
+  <div class="field-label-row">
+    <label for="questionText">
+      Question Text / Summary Title
+    </label>
+
+    <button
+      type="button"
+      class="help-tooltip"
+      aria-label="Help for Question Text or Summary Title"
+      aria-haspopup="true"
+    >
+      ?
+
+      <span
+        class="help-tooltip-box"
+        role="tooltip"
+      >
+        <strong>
+          QUESTION TEXT / SUMMARY TITLE
+        </strong>
+
+        <span>
+          Enter the full question wording or the title that should appear in the table output. For summary tables, enter a short title included in stub specs.
+        </span>
+
+        <span class="help-section-title">
+          EXAMPLES
+        </span>
+
+        <span>
+          <code>What was the last level of education you completed?</code>
+        </span>
+
+        <span>
+          <code>SUMMARY OF KEY DATA</code>
+        </span>
+
+        <span class="help-section-title">
+          NOTE
+        </span>
+
+        <span>
+          Check the spelling, capitalization and punctuation before generating the syntax.
+        </span>
+      </span>
+    </button>
+  </div>
+
+  <textarea
+    id="questionText"
+  ></textarea>
+</div>
+
+   <div
+  id="answerOptionsBox"
+  class="form-group hidden"
+>
+  <div class="field-label-row">
+    <label for="answerOptions">
+      Answer Options
+    </label>
+
+    <button
+      type="button"
+      class="help-tooltip"
+      aria-label="Help for Answer Options"
+      aria-haspopup="true"
+    >
+      ?
+
+      <span
+        class="help-tooltip-box"
+        role="tooltip"
+      >
+        <strong>ANSWER OPTIONS</strong>
+
+        <span>
+          Paste the answer codes and labels used for the question.
+        </span>
+
+        <span class="help-section-title">
+          FORMAT
+        </span>
+
+        <span>
+          Enter one answer option per line, with the code first and the label after it.
+        </span>
+
+        <span class="help-section-title">
+          EXAMPLE
+        </span>
+
+        <span>
+          <code>1&nbsp;&nbsp;DEFINITELY YES</code>
+        </span>
+
+        <span>
+          <code>2&nbsp;&nbsp;PROBABLY YES</code>
+        </span>
+
+        <span>
+          <code>3&nbsp;&nbsp;UNDECIDED, LEAN YES</code>
+        </span>
+
+      </span>
+    </button>
+  </div>
+
+  <textarea
+    id="answerOptions"
+    placeholder="Paste one answer option per line.&#10;&#10;1    DEFINITELY YES&#10;2    PROBABLY YES&#10;3    UNDECIDED, LEAN YES"
+  ></textarea>
 
   <div class="custom-code-extra">
-    <div class="checkbox-row">
-      <input id="useCustomNetGroups" type="checkbox" />
-      <label for="useCustomNetGroups">Active Total / Net Groups</label>
+    <div class="checkbox-row checkbox-row-with-help">
+      <div class="checkbox-label-group">
+        <input
+          id="useCustomNetGroups"
+          type="checkbox"
+        />
+
+        <label for="useCustomNetGroups">
+          Active Total / Net Groups
+        </label>
+      </div>
+
+      <button
+        type="button"
+        class="help-tooltip"
+        aria-label="Help for Active Total or Net Groups"
+        aria-haspopup="true"
+      >
+        ?
+
+        <span
+          class="help-tooltip-box"
+          role="tooltip"
+        >
+          <strong>
+            ACTIVE TOTAL / NET GROUPS
+          </strong>
+
+          <span>
+            Enable this option when the table requires combined rows such as totals or net groups.
+          </span>
+
+          <span class="help-section-title">
+            NOTE
+          </span>
+
+          <span>
+            Once selected, the Total / Net Groups field will appear below.
+          </span>
+        </span>
+      </button>
     </div>
 
-    <div id="customNetGroupBox" class="hidden">
-      <label for="customNetGroups">Total / Net Groups</label>
-      <textarea id="customNetGroups" placeholder="Example:
-        1:2	TOTAL YES
-        3:4	TOTAL NO"></textarea>
-      <small>
-       Format: code range + label
-      </small>
+    <div
+      id="customNetGroupBox"
+      class="hidden"
+    >
+      <div class="field-label-row">
+        <label for="customNetGroups">
+          Total / Net Groups
+        </label>
 
-      <button id="buildCustomDSBtn" type="button" class="secondary">
-        Build D/S Setup
-      </button>
+        <button
+          type="button"
+          class="help-tooltip"
+          aria-label="Help for Total or Net Groups"
+          aria-haspopup="true"
+        >
+          ?
 
-      <div id="customDSBox" class="custom-ds-box hidden">
-        <div class="custom-ds-grid">
-          <div class="form-group">
-            <label for="customDSPositive">D/S Positive Row</label>
-            <select id="customDSPositive"></select>
-          </div>
+          <span
+            class="help-tooltip-box"
+            role="tooltip"
+          >
+            <strong>TOTAL / NET GROUPS</strong>
 
-          <div class="form-group">
-            <label for="customDSNegative">D/S Negative Row</label>
-            <select id="customDSNegative"></select>
-          </div>
-        </div>
-        <small>Select answer options for D/S positive and negativs</small>
+            <span>
+              Enter the combined response groups that should appear above the individual answer rows.
+            </span>
+
+            <span class="help-section-title">
+              RANGE FORMAT
+            </span>
+
+            <span>
+              Enter the answer-code range first, followed by the group label.
+            </span>
+
+            <span>
+              <code>1-3 TOTAL YES</code>
+            </span>
+
+            <span>
+              <code>4-5 TOTAL NO</code>
+            </span>
+
+            <span class="help-section-title">
+              OR
+            </span>
+
+            <span>
+              Enter the group label first, followed by the question logic.
+            </span>
+
+            <span>
+              <code>TOTAL KIGGANS&nbsp;&nbsp;Q13:1-3 OR Q14:1</code>
+            </span>
+            
+          </span>
+        </button>
       </div>
+
+      <textarea
+        id="customNetGroups"
+      ></textarea>
+
+    
     </div>
   </div>
 </div>
+
         <div id="normalOptionsBox">
-          <div class="checkbox-row">
-            <input id="useST" type="checkbox" />
-            <label for="useST">Active ST</label>
-          </div>
+  <div class="checkbox-row checkbox-row-with-help">
+    <div class="checkbox-label-group">
+      <input
+        id="useST"
+        type="checkbox"
+      />
 
-          <div id="subtitleBox" class="form-group hidden">
-            <label for="subtitleOnly">Subtitle Text</label>
-            <textarea id="subtitleOnly" placeholder="For range eg. Q24:25, paste one subtitle per line.
-eg. 24.	If we don't take care of our parks and trails and keep up our recreation facilities
-    25.	In today's digital age, it is more important than ever to have places where children can safely run"></textarea>
-          </div>
+      <label for="useST">
+        Active ST
+      </label>
+    </div>
 
-          <div id="useDSBox" class="checkbox-row">
-            <input id="useDS" type="checkbox" checked />
-            <label for="useDS">Active D/S</label>
-          </div>
+    <button
+      type="button"
+      class="help-tooltip"
+      aria-label="Help for Active ST"
+      aria-haspopup="true"
+    >
+      ?
 
-          <div class="form-group">
-            <label for="manualUseIndex">USE Index</label>
-            <input id="manualUseIndex" type="number" placeholder="Optional. Example: 1, 5, 17" />
-          </div>
+      <span
+        class="help-tooltip-box"
+        role="tooltip"
+      >
+        <strong>ACTIVE ST</strong>
+
+        <span>
+          Enable this option when the table requires subtitle text.
+        </span>
+
+        <span class="help-section-title">
+          NOTE
+        </span>
+
+        <span>
+          Leave this option unchecked when no subtitle is required.
+        </span>
+      </span>
+    </button>
+  </div>
+
+  <div
+    id="subtitleBox"
+    class="form-group hidden"
+  >
+    <div class="field-label-row">
+      <label for="subtitleOnly">
+        Subtitle Text
+      </label>
+
+      <button
+        type="button"
+        class="help-tooltip"
+        aria-label="Help for Subtitle Text"
+        aria-haspopup="true"
+      >
+        ?
+
+        <span
+          class="help-tooltip-box"
+          role="tooltip"
+        >
+          <strong>SUBTITLE TEXT</strong>
+
+          <span class="help-section-title">
+            SINGLE TABLE
+          </span>
+
+          <span>
+            Enter one subtitle.
+          </span>
+
+          <span class="help-section-title">
+            TABLE RANGE
+          </span>
+
+          <span>
+            Enter one subtitle per line, following the same order as the question-code range.
+          </span>
+
+          <span class="help-section-title">
+            EXAMPLE
+          </span>
+
+          <span>
+            For <code>Q24:25</code>, line 1 is used for Q24 and line 2 is used for Q25.
+          </span>
+
+          <span class="help-section-title">
+            NOTE
+          </span>
+
+          <span>
+            Keep the subtitle order consistent with the question-code range.
+          </span>
+        </span>
+      </button>
+    </div>
+
+    <textarea
+      id="subtitleOnly"
+      placeholder="For a range such as Q24:25, enter one subtitle per line.&#10;&#10;24. If we don't take care of our parks and trails...&#10;25. In today's digital age, it is more important than ever..."
+    ></textarea>
+  </div>
+
+  <!-- Không đóng normalOptionsBox tại đây -->
+
+         <div class="form-group">
+  <div class="field-label-row">
+    <label for="manualUseIndex">
+      USE Index
+    </label>
+
+    <button
+      type="button"
+      class="help-tooltip"
+      aria-label="Help for USE Index"
+      aria-haspopup="true"
+    >
+      ?
+
+      <span
+        class="help-tooltip-box"
+        role="tooltip"
+      >
+        <strong>USE INDEX</strong>
+
+        <span>
+          Enter the numeric index required for the
+          <code>USE</code> statement.
+        </span>
+
+
+        <span class="help-section-title">
+          EXAMPLES
+        </span>
+
+        <span>
+          <code>1</code>, <code>5</code> or <code>17</code>
+        </span>
+
+        <span class="help-section-title">
+          NOTE
+        </span>
+
+        <span>
+          This field is optional. Leave it blank when a manual
+          USE index is not required.
+        </span>
+      </span>
+    </button>
+  </div>
+
+  <input
+    id="manualUseIndex"
+    type="number"
+    min="1"
+    step="1"
+    placeholder="Optional. Example: 1, 5, or 17"
+  />
+</div>
+
+</div>
+
+<!-- Shared D/S Setup: dùng chung cho Custom Code và Demographic -->
+<div
+  id="sharedDSSetupBox"
+  class="form-group hidden"
+>
+  <div
+    id="useDSBox"
+    class="checkbox-row checkbox-row-with-help"
+  >
+    <div class="checkbox-label-group">
+      <input
+        id="useDS"
+        type="checkbox"
+        checked
+      />
+
+      <label for="useDS">
+        Active D/S
+      </label>
+    </div>
+
+    <button
+      type="button"
+      class="help-tooltip"
+      aria-label="Help for Active D/S"
+      aria-haspopup="true"
+    >
+      ?
+
+      <span
+        class="help-tooltip-box"
+        role="tooltip"
+      >
+        <strong>ACTIVE D/S</strong>
+
+        <span>
+          Enable this option to add a Difference Score row to the table.
+        </span>
+
+        <span class="help-section-title">
+          SETUP
+        </span>
+
+        <span>
+          Click <code>Build D/S Setup</code>, then select the positive and negative rows.
+        </span>
+
+        <span class="help-section-title">
+          NOTE
+        </span>
+
+        <span>
+          Turn this option off when the table does not require a D/S calculation.
+        </span>
+      </span>
+    </button>
+  </div>
+
+  <button
+    id="buildCustomDSBtn"
+    type="button"
+    class="secondary hidden"
+  >
+    Build D/S Setup
+  </button>
+
+  <div
+    id="customDSBox"
+    class="custom-ds-box hidden"
+  >
+    <div class="custom-ds-grid">
+      <div class="form-group">
+        <div class="field-label-row">
+          <label for="customDSPositive">
+            D/S Positive Row
+          </label>
+
+            </span>
+          </button>
         </div>
 
+        <select id="customDSPositive"></select>
+      </div>
+
+      <div class="form-group">
+        <div class="field-label-row">
+          <label for="customDSNegative">
+            D/S Negative Row
+          </label>
+
+  
+        </div>
+
+        <select id="customDSNegative"></select>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+        <div id="sharedMeanSetupBox" class="form-group hidden">
+  <div class="checkbox-row">
+    <input id="useMean" type="checkbox" />
+    <label for="useMean">Active MEAN</label>
+  </div>
+
+  <div id="meanSetupBox" class="form-group hidden">
+    <label for="meanCodeRange">MEAN Code Range</label>
+
+    <input
+      id="meanCodeRange"
+      type="text"
+      placeholder="Example: 1-10 or 1-5,7,9-10"
+    />
+
+    <small>
+      Enter the answer codes included in the MEAN calculation.
+    </small>
+  </div>
+</div>
+
+<!-- Active Rank phải nằm ngoài Shared D/S Setup -->
+<div id="useRankBox" class="form-group hidden">
+  <div class="checkbox-row">
+    <input id="useRank" type="checkbox" />
+
+    <label for="useRank">
+      Active Rank
+    </label>
+  </div>
+
+  <small>
+    Add OD to the end of Table Options.
+  </small>
+</div>
         <div class="form-group">
-          <label for="baseType">Base Type</label>
-          <select id="baseType">
-            <option value="total_sample">Base / Total Sample</option>
-            <option value="asked_base">Asked Base</option>
-          </select>
-        </div>
+  <div class="field-label-row">
+    <label for="baseType">
+      Base Type
+    </label>
 
-       <div id="askedBaseBox" class="form-group hidden">
+    <button
+      type="button"
+      class="help-tooltip"
+      aria-label="Help for Base Type"
+      aria-haspopup="true"
+    >
+      ?
+
+      <span
+        class="help-tooltip-box"
+        role="tooltip"
+      >
+        <strong>BASE TYPE</strong>
+
+        <span class="help-section-title">
+          BASE / TOTAL SAMPLE
+        </span>
+
+        <span>
+          Uses the all ask sample as the base.
+        </span>
+
+        <span class="help-section-title">
+          ASKED BASE
+        </span>
+
+        <span>
+          Uses only for specific group of respondents.
+        </span>
+
+      </span>
+    </button>
+  </div>
+
+  <select id="baseType">
+    <option value="total_sample">
+      Base / Total Sample
+    </option>
+
+    <option value="asked_base">
+      Asked Base
+    </option>
+  </select>
+</div>
+
+<div
+  id="askedBaseBox"
+  class="form-group hidden"
+>
   <div id="askedBaseTextBox">
-    <label for="askedBaseText">Asked Base Text</label>
-    <input id="askedBaseText" type="text" placeholder="Example: SAMPLE A" />
+    <div class="field-label-row">
+      <label for="askedBaseText">
+        Asked Base Text
+      </label>
+
+      <button
+        type="button"
+        class="help-tooltip"
+        aria-label="Help for Asked Base Text"
+        aria-haspopup="true"
+      >
+        ?
+
+        <span
+          class="help-tooltip-box"
+          role="tooltip"
+        >
+          <strong>ASKED BASE TEXT</strong>
+
+          <span>
+            Enter the base description that should appear in the table.
+          </span>
+
+          <span class="help-section-title">
+            EXAMPLES
+          </span>
+
+          <span>
+            <code>SAMPLE A</code>
+          </span>
+
+          <span>
+            <code>ASKED IF Q4=1</code>
+          </span>
+
+          <span class="help-section-title">
+            NOTE
+          </span>
+
+          <span>
+            Use wording that clearly identifies the respondents included in the asked base.
+          </span>
+        </span>
+      </button>
+    </div>
+
+    <input
+      id="askedBaseText"
+      type="text"
+      placeholder="Example: SAMPLE A"
+    />
   </div>
 
   <div id="arraySampleSetupBox" class="array-sample-box hidden">
@@ -214,7 +989,6 @@ SAMPLE E"></textarea>
     <textarea id="rankingMetricDefinitions" class="summary-raw" placeholder="% Extremely Important (:1)
 % Extremely/Very Important (:1-2)
 % Total Important (:1-3)"></textarea>
-    <small>Mỗi metric sẽ tạo ra một table riêng.</small>
   </div>
 
   <div class="checkbox-row">
@@ -251,8 +1025,6 @@ SAMPLE E"></textarea>
   <button id="addSplitRowBtn" type="button" class="secondary small-btn">
     + Add Split Row
   </button>
-
-  <small>HR,SX luôn được add mặc định. Có thể nhập code dạng 1, 2, 1-2, 3-4.</small>
 </div>
 
   <div class="form-group">
@@ -280,7 +1052,6 @@ SAMPLE E"></textarea>
     WHITE WOMEN	D6:2 AND D2:2
     NONWHITE MEN	D6:1,3-5 AND D2:1
     NONWHITE WOMEN	D6:1,3-5 AND D2:2"></textarea>
-        <small>App sẽ tự convert D6:2 AND D2:1 thành D6(2) & D2(1).</small>
       </div>
     </div>
 
@@ -300,9 +1071,6 @@ HINSDALE | 9
 Language | LANGUAGE
 ENGLISH | 1
 SPANISH | 2"></textarea>
-    <small>
-      Format section đầu: SECTION NAME | VARIABLE. Dòng có range như 1-8 sẽ là group row. Dòng code đơn như 1, 2 sẽ là child row.
-    </small>
   </div>
 
 <input type="file" id="regionFileInput" />
@@ -322,7 +1090,6 @@ SPANISH | 2"></textarea>
   <label for="versionExtraRows">VERSION Extra Rows</label>
   <textarea id="versionExtraRows" placeholder="Optional. Example:
 SAMPLE C | SplitCD | 3"></textarea>
-  <small>Mặc định app luôn output SAMPLE A và SAMPLE B. Nhập thêm nếu có SAMPLE C, SAMPLE D...</small>
 </div>
 
 <div class="checkbox-row">
@@ -339,7 +1106,6 @@ SAMPLE C | SplitCD | 3"></textarea>
   <textarea id="modeExtraRows" placeholder="Optional. Example:
 WEB | modetype | 5
 APP | modetype | 6"></textarea>
-  <small>Mặc định app luôn output LANDLINE, CELL, TEXT, EMAIL. Nhập thêm nếu cần.</small>
 </div>
 
 <div class="checkbox-row">
@@ -359,8 +1125,6 @@ APP | modetype | 6"></textarea>
     <input id="startDateInput" type="text" placeholder="Start date: 20260421" />
     <input id="endDateInput" type="text" placeholder="End date: 20260430" />
   </div>
-
-  <small>Format date: YYYYMMDD. App sẽ tự generate TUE, APRIL 21...</small>
 </div>
 
 </div> <!-- đóng listoutSetupPanel -->
@@ -425,7 +1189,7 @@ APP | modetype | 6"></textarea>
 
     <div class="modal-body">
       <p class="modal-help">
-        Chọn suffix cuối dòng cho từng item. Blank = không thêm, 1 = ^1, 2 = ^2.
+        Select suffix in the last for each items
       </p>
 
       <div id="rankingSplitTableContainer"></div>
@@ -446,7 +1210,7 @@ APP | modetype | 6"></textarea>
 
     <div class="modal-body">
       <p class="modal-help">
-        Chọn sample/base cho từng array item. Dropdown sẽ hiện Sample Name cho dễ nhìn.
+        Select sample/base for each array item. The dropdown will display the Sample Name for easier identification.
       </p>
 
       <div id="arraySampleTableContainer"></div>

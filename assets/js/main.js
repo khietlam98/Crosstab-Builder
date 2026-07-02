@@ -331,6 +331,26 @@ const normalOptionsBox = document.getElementById("normalOptionsBox");
 const useSTCheckbox = document.getElementById("useST");
 const useDSCheckbox = document.getElementById("useDS");
 const useDSBox = document.getElementById("useDSBox");
+const sharedDSSetupBox = document.getElementById("sharedDSSetupBox");
+
+const useRankBox =
+  document.getElementById("useRankBox");
+
+const useRankCheckbox =
+  document.getElementById("useRank");
+
+const sharedMeanSetupBox =
+  document.getElementById("sharedMeanSetupBox");
+
+const useMeanCheckbox =
+  document.getElementById("useMean");
+
+const meanSetupBox =
+  document.getElementById("meanSetupBox");
+
+const meanCodeRangeInput =
+  document.getElementById("meanCodeRange");
+
 const subtitleBox = document.getElementById("subtitleBox");
 const subtitleOnlyInput = document.getElementById("subtitleOnly");
 const manualUseIndexInput = document.getElementById("manualUseIndex");
@@ -411,6 +431,158 @@ const copyBtn = document.getElementById("copyBtn");
 
 function normalizeQuestionCode(value) {
   return value.trim().toUpperCase();
+}
+
+function isDSLine(line) {
+  return String(line || "")
+    .trim()
+    .startsWith("**D/S");
+}
+
+function removeLeadingQuestionNumber(value) {
+  let text = String(value || "");
+
+  /*
+    Hỗ trợ:
+    6. Question text
+    6) Question text
+    Q6. Question text
+    V3. Question text
+    M1. Question text
+    D1B. Question text
+    Q13/14. Question text
+    M1-M7. Question text
+
+    Bắt buộc phải có khoảng trắng sau dấu . hoặc )
+    để không xóa nhầm số thập phân như 6.5 million.
+  */
+  const leadingCodePattern =
+    /^\s*(?:(?:[A-Z]+\d+[A-Z]*|\d+)(?:\s*(?:\/|-)\s*(?:[A-Z]*\d+[A-Z]*|\d+))*)\s*[.)]\s+/i;
+
+  /*
+    Dùng vòng lặp để xử lý trường hợp:
+    6. V3. Question text
+  */
+  let previousText;
+
+  do {
+    previousText = text;
+    text = text.replace(leadingCodePattern, "");
+  } while (text !== previousText);
+
+  return text;
+}
+
+function normalizeQuestionSpacing(value) {
+  return String(value || "")
+    /*
+      Chuẩn hóa line break từ Windows.
+    */
+    .replace(/\r\n?/g, "\n")
+
+    /*
+      Chỉ gộp space, tab và non-breaking space.
+      Không dùng \s+ vì \s+ sẽ xóa luôn xuống dòng.
+    */
+    .split("\n")
+    .map(line => {
+      return line
+        .replace(/[\t\u00A0 ]+/g, " ")
+        .trim();
+    })
+    .join("\n")
+
+    /*
+      Tối đa giữ một dòng trống giữa các đoạn.
+    */
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function normalizeQuestionText(value) {
+  const withoutQuestionNumber =
+    removeLeadingQuestionNumber(value);
+
+  return normalizeQuestionSpacing(
+    withoutQuestionNumber
+  );
+}
+
+function getDemographicBodyLines(
+  rowType,
+  questionCode,
+  additionalCodesText = ""
+) {
+  const normalizedRowType = normalizeRowType(rowType);
+  const template = demographicTemplates[normalizedRowType];
+
+  if (!template) {
+    return [];
+  }
+
+  const templateLines = template
+    .filter(line => !isDSLine(line))
+    .map(line => {
+      return line.replaceAll("{VAR}", questionCode);
+    });
+
+  const additionalLines = buildAdditionalCodeLines(
+    additionalCodesText
+  );
+
+  return [
+    ...templateLines,
+    ...additionalLines
+  ];
+}
+
+function extractDemographicRowLabel(line) {
+  return String(line || "")
+    .split("^")[0]
+    .trim();
+}
+
+function getDemographicDSChoices() {
+  const rowType = rowTypeSelect.value;
+  const questionCode = normalizeQuestionCode(
+    questionCodeInput.value
+  );
+
+  if (!rowType) {
+    alert("Please select Demographic Row Type first.");
+    return [];
+  }
+
+  if (!questionCode) {
+    alert("Please enter Question Code first.");
+    return [];
+  }
+
+  const bodyLines = getDemographicBodyLines(
+    rowType,
+    questionCode,
+    demographicAdditionalCodesInput.value
+  );
+
+  return bodyLines
+    .map((line, bodyIndex) => {
+      const label = extractDemographicRowLabel(line);
+
+      /*
+        Dòng trống vẫn được tính bodyIndex,
+        nhưng không đưa vào dropdown.
+      */
+      if (!label) {
+        return null;
+      }
+
+      return {
+        type: "demographic",
+        label,
+        rowNumber: bodyIndex + 2
+      };
+    })
+    .filter(choice => choice !== null);
 }
 
 function getArrayItemLabels(questionCodes) {
@@ -592,6 +764,22 @@ const normalRowTypeOptions = [
   { value: "support_oppose", text: "TOT SUPPORT / TOT OPPOSE" }
 ];
 
+const ALL_QUESTION_TYPES = new Set([
+  "single_choice",
+  "array",
+  "multiple_choice",
+  "demographic",
+  "summary_table",
+  "ranking_table",
+  "listout_table"
+]);
+
+function isKnownQuestionType(questionType) {
+  return ALL_QUESTION_TYPES.has(
+    String(questionType || "")
+  );
+}
+
 const demographicRowTypeOptions = [
   { value: "", text: "Please select a demographic type...", disabled: true },
   { value: "age", text: "AGE" },
@@ -605,6 +793,7 @@ const demographicRowTypeOptions = [
   { value: "financial_situation", text: "FINANCIAL SITUATION" },
   { value: "custom_code", text: "CUSTOM CODE" }
 ];
+
 
 function populateRowTypeOptions(options, selectedValue = "") {
   rowTypeSelect.innerHTML = "";
@@ -653,19 +842,83 @@ function closePlusSection(button, box, openText) {
 }
 
 function toggleUseDSBox() {
-  const isCustomCode = normalizeRowType(rowTypeSelect.value) === "custom_code";
-  const isMultipleChoice = questionTypeSelect.value === "multiple_choice";
+  const questionType = questionTypeSelect.value;
 
-  const isSummaryOrRanking =
-    questionTypeSelect.value === "summary_table" ||
-    questionTypeSelect.value === "ranking_table" ||
-    questionTypeSelect.value === "listout_table";
+  const rowType = normalizeRowType(
+    rowTypeSelect.value
+  );
 
-  if (isCustomCode || isMultipleChoice || isSummaryOrRanking) {
-    useDSBox.classList.add("hidden");
-  } else {
-    useDSBox.classList.remove("hidden");
+  const shouldHide =
+    !questionType ||
+    questionType === "summary_table" ||
+    questionType === "ranking_table" ||
+    questionType === "listout_table";
+
+  if (shouldHide) {
+    sharedDSSetupBox.classList.add("hidden");
+    buildCustomDSBtn.classList.add("hidden");
+    customDSBox.classList.add("hidden");
+    return;
   }
+
+  /*
+    Hiện khu vực Active D/S cho:
+    - Single Choice
+    - Multiple Choice
+    - Array
+    - Demographic
+  */
+  sharedDSSetupBox.classList.remove("hidden");
+  useDSBox.classList.remove("hidden");
+
+  /*
+    Những loại cần chọn Positive/Negative:
+    - Multiple Choice
+    - Custom Code
+    - Demographic
+  */
+  const needsDSSetup =
+    questionType === "multiple_choice" ||
+    rowType === "custom_code" ||
+    questionType === "demographic";
+
+  if (
+    useDSCheckbox.checked &&
+    needsDSSetup
+  ) {
+    buildCustomDSBtn.classList.remove("hidden");
+  } else {
+    buildCustomDSBtn.classList.add("hidden");
+    customDSBox.classList.add("hidden");
+  }
+}
+
+function toggleRankBox() {
+  const questionType =
+    questionTypeSelect.value;
+
+  const supportedQuestionTypes = [
+    "single_choice",
+    "multiple_choice",
+    "summary_table",
+    "ranking_table",
+    "array",
+    "demographic",
+    "listout_table"
+  ];
+
+  const isSupported =
+    supportedQuestionTypes.includes(
+      questionType
+    );
+
+  if (!isSupported) {
+    useRankBox.classList.add("hidden");
+    useRankCheckbox.checked = false;
+    return;
+  }
+
+  useRankBox.classList.remove("hidden");
 }
 
 function toggleCustomNetGroupBox() {
@@ -673,8 +926,17 @@ function toggleCustomNetGroupBox() {
     customNetGroupBox.classList.remove("hidden");
   } else {
     customNetGroupBox.classList.add("hidden");
-    customDSBox.classList.add("hidden");
   }
+
+  /*
+    Rebuild lại D/S vì row number thay đổi
+    khi bật hoặc tắt Net Groups.
+  */
+  customDSPositiveSelect.innerHTML = "";
+  customDSNegativeSelect.innerHTML = "";
+  customDSBox.classList.add("hidden");
+
+  toggleUseDSBox();
 }
 
 function toggleAnswerOptionsBox() {
@@ -746,8 +1008,12 @@ function parseAdditionalCodes(text) {
     .filter(item => item !== null);
 }
 
-function buildAdditionalCodeLines(additionalCodesText) {
-  const items = parseAdditionalCodes(additionalCodesText);
+function buildAdditionalCodeLines(
+  additionalCodesText
+) {
+  const items = parseAdditionalCodes(
+    additionalCodesText
+  );
 
   if (items.length === 0) {
     return [];
@@ -757,10 +1023,15 @@ function buildAdditionalCodeLines(additionalCodesText) {
 
   items.forEach(item => {
     lines.push(
-      " " +
-      item.label.padEnd(28) +
-      "^ " +
-      item.logic
+      formatSyntaxRow(
+        item.label,
+        item.logic,
+        {
+          indent: " ",
+          logicColumn: 34,
+          addTrailingCaret: false
+        }
+      )
     );
   });
 
@@ -768,92 +1039,207 @@ function buildAdditionalCodeLines(additionalCodesText) {
 }
 
 function buildDemographicTemplateLines(table) {
-  const rowType = normalizeRowType(table.rowType);
+  const rowType = normalizeRowType(
+    table.rowType
+  );
 
+  /*
+    Custom Code vẫn dùng logic cũ.
+  */
   if (rowType === "custom_code") {
     const lines = [];
 
-    const dsLine = buildCustomDSLine(table);
+    const dsLine = table.useDS
+      ? buildCustomDSLine(table)
+      : "";
 
     if (dsLine) {
       lines.push(dsLine);
     }
 
-    buildCustomNetGroupLines(table).forEach(line => lines.push(line));
+    buildCustomNetGroupLines(table)
+      .forEach(line => {
+        lines.push(line);
+      });
 
     buildRowsFromAnswerOptions(
       table.answerOptions,
       table.questionCode,
       table.customNetGroups || []
-    ).forEach(line => lines.push(line));
+    ).forEach(line => {
+      lines.push(line);
+    });
 
-    buildAdditionalCodeLines(table.demographicAdditionalCodes || "").forEach(line => {
+    buildAdditionalCodeLines(
+      table.demographicAdditionalCodes || ""
+    ).forEach(line => {
       lines.push(line);
     });
 
     return lines;
   }
 
-  const template = demographicTemplates[rowType];
+  const template =
+    demographicTemplates[rowType];
 
   if (!template) {
-    return ["*** ERROR: DEMOGRAPHIC TEMPLATE NOT FOUND - " + table.rowType + " ***"];
+    return [
+      "*** ERROR: DEMOGRAPHIC TEMPLATE NOT FOUND - " +
+      table.rowType +
+      " ***"
+    ];
   }
 
-  const lines = template.map(line => {
-    return line.replaceAll("{VAR}", table.questionCode);
-  });
+  /*
+    Toàn bộ demographic body giữ nguyên.
+    Chỉ không lấy dòng D/S cứng.
+  */
+  const bodyLines = getDemographicBodyLines(
+    table.rowType,
+    table.questionCode,
+    table.demographicAdditionalCodes || ""
+  );
 
-  buildAdditionalCodeLines(table.demographicAdditionalCodes || "").forEach(line => {
+  const lines = [];
+
+  /*
+    Dùng lại buildCustomDSLine hiện có.
+  */
+  if (table.useDS) {
+    const dsLine = buildCustomDSLine(table);
+
+    if (dsLine) {
+      lines.push(dsLine);
+    }
+  }
+
+  bodyLines.forEach(line => {
     lines.push(line);
   });
 
   return lines;
 }
 
+function normalizeRankingQuestionCode(value) {
+  const clean = String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[.)]+$/, "");
+
+  if (!clean) {
+    return "";
+  }
+
+  /*
+    Giữ tương thích format cũ:
+
+    1  => Q1
+    24 => Q24
+  */
+  if (/^\d+$/.test(clean)) {
+    return "Q" + clean;
+  }
+
+  /*
+    Giữ nguyên những code có prefix:
+
+    Q1
+    M1
+    M7
+    D1B
+    BALLOT1
+  */
+  if (
+    /^[A-Z][A-Z0-9_]*$/.test(clean) &&
+    /\d/.test(clean)
+  ) {
+    return clean;
+  }
+
+  return "";
+}
+
 function parseRankingItems(text) {
-  const lines = text
+  const lines = String(text || "")
     .split("\n")
     .map(line => line.trim())
     .filter(line => line !== "");
 
-  return lines.map(line => {
-    // Format có dấu |:
-    // 7 | INCREASING SAFETY FOR DRIVERS | 1
-    // 24. | If we don't take care... | 2
-    if (line.includes("|")) {
-      const parts = line.split("|").map(part => part.trim());
+  return lines
+    .map(line => {
+      /*
+        FORMAT A — có dấu |
 
-      const questionNumber = parts[0]
-        .replace(/^Q/i, "")
-        .replace(/[.)]$/, "")
+        M1 | BIPARTISAN | 1
+        M2 | ROAD ACT |
+        Q7 | INCREASING SAFETY | 2
+        7 | INCREASING SAFETY | 1
+
+        Nếu code chỉ là số 7, app vẫn convert thành Q7.
+      */
+      if (line.includes("|")) {
+        const parts = line
+          .split("|")
+          .map(part => part.trim());
+
+        const questionCode =
+          normalizeRankingQuestionCode(
+            parts[0]
+          );
+
+        const label = parts[1] || "";
+        const splitSuffix = parts[2] || "";
+
+        if (!questionCode || !label) {
+          return null;
+        }
+
+        return {
+          questionCode,
+          label,
+          splitSuffix
+        };
+      }
+
+      /*
+        FORMAT B — không có dấu |
+
+        M1 BIPARTISAN
+        M1. BIPARTISAN
+        M1) BIPARTISAN
+
+        Q24 IF WE DON'T TAKE CARE...
+        24 IF WE DON'T TAKE CARE...
+
+        Code là token đầu tiên của dòng.
+      */
+      const match = line.match(
+        /^([A-Z][A-Z0-9_]*|\d+)[.)]?\s+(.+)$/i
+      );
+
+      if (!match) {
+        return null;
+      }
+
+      const questionCode =
+        normalizeRankingQuestionCode(
+          match[1]
+        );
+
+      const label = String(match[2] || "")
         .trim();
 
+      if (!questionCode || !label) {
+        return null;
+      }
+
       return {
-        questionCode: "Q" + questionNumber,
-        label: parts[1] || "",
-        splitSuffix: parts[2] || ""
+        questionCode,
+        label,
+        splitSuffix: ""
       };
-    }
-
-    // Format thường:
-    // 24 If we don't take care...
-    // 24. If we don't take care...
-    // 24) If we don't take care...
-    // Q24 If we don't take care...
-    // Q24. If we don't take care...
-    const match = line.match(/^Q?(\d+)[.)]?\s+(.+)$/i);
-
-    if (!match) {
-      return null;
-    }
-
-    return {
-      questionCode: "Q" + match[1],
-      label: match[2].trim(),
-      splitSuffix: ""
-    };
-  }).filter(item => item !== null && item.label !== "");
+    })
+    .filter(item => item !== null);
 }
 
 function buildRankingSplitSetup() {
@@ -969,22 +1355,31 @@ function buildSplitABLines(table) {
 function buildRankingTableLines(table) {
   const lines = [];
 
-  buildSplitABLines(table).forEach(line => {
-    lines.push(line);
-  });
+  buildSplitABLines(table)
+    .forEach(line => {
+      lines.push(line);
+    });
 
   table.rankingItems.forEach(item => {
-    const suffix = item.splitSuffix ? item.splitSuffix : "";
+    const suffix =
+      item.splitSuffix || "";
 
-    lines.push(
-      " " +
-      item.label.padEnd(72) +
-      "^ " +
+    const logic =
       item.questionCode +
       "(" +
       table.metricCode +
-      ")^" +
-      suffix
+      ")";
+
+    lines.push(
+      formatSyntaxRow(
+        item.label,
+        logic,
+        {
+          indent: " ",
+          logicColumn: 74,
+          suffix
+        }
+      )
     );
   });
 
@@ -996,38 +1391,111 @@ function normalizeRowType(value) {
 }
 
 function expandQuestionCodes(input) {
-  const raw = input.trim().toUpperCase();
+  const raw = String(input || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
 
-  if (!raw.includes(":")) {
+  if (!raw) {
+    return [];
+  }
+
+  /*
+    Single code được hỗ trợ:
+
+    Q1
+    M1
+    D1
+    1
+  */
+  if (/^(?:[A-Z]+)?\d+$/.test(raw)) {
     return [raw];
   }
 
-  const parts = raw.split(":");
-  const startRaw = parts[0].trim();
-  const endRaw = parts[1].trim();
+  /*
+    Range được hỗ trợ:
 
-  const prefixMatch = startRaw.match(/^[A-Z]+/);
-  const startNumberMatch = startRaw.match(/\d+$/);
-  const endNumberMatch = endRaw.match(/\d+$/);
+    Q1:5
+    Q1:Q5
+    Q1-5
+    Q1-Q5
 
-  if (!prefixMatch || !startNumberMatch || !endNumberMatch) {
-    alert("Invalid question range. Use format like Q1:5 or Q1:Q5.");
+    M1:7
+    M1:M7
+    M1-7
+    M1-M7
+
+    1:5
+    1-5
+  */
+  const rangeMatch = raw.match(
+    /^([A-Z]*)(\d+)(?::|-)([A-Z]*)(\d+)$/
+  );
+
+  if (!rangeMatch) {
+    alert(
+      "Invalid question range.\n\n" +
+      "Supported formats:\n" +
+      "Q1:5\n" +
+      "Q1-Q5\n" +
+      "M1:M7\n" +
+      "M1-M7"
+    );
+
     return [];
   }
 
-  const prefix = prefixMatch[0];
-  const startNumber = parseInt(startNumberMatch[0], 10);
-  const endNumber = parseInt(endNumberMatch[0], 10);
+  const startPrefix = rangeMatch[1] || "";
+  const startNumber = Number(rangeMatch[2]);
+
+  const typedEndPrefix = rangeMatch[3] || "";
+  const endNumber = Number(rangeMatch[4]);
+
+  /*
+    Nếu phía sau không nhập prefix:
+
+    M1-7
+
+    thì kế thừa prefix M.
+  */
+  const endPrefix =
+    typedEndPrefix || startPrefix;
+
+  /*
+    Không cho range khác prefix:
+
+    M1-Q7
+  */
+  if (
+    startPrefix &&
+    endPrefix &&
+    startPrefix !== endPrefix
+  ) {
+    alert(
+      "Start code and end code must use the same prefix.\n\n" +
+      "Example: M1-M7"
+    );
+
+    return [];
+  }
 
   if (endNumber < startNumber) {
-    alert("Invalid question range. End number must be greater than start number.");
+    alert(
+      "Invalid question range. End number must be greater than or equal to start number."
+    );
+
     return [];
   }
 
+  const prefix = startPrefix || endPrefix;
   const codes = [];
 
-  for (let i = startNumber; i <= endNumber; i++) {
-    codes.push(prefix + i);
+  for (
+    let number = startNumber;
+    number <= endNumber;
+    number++
+  ) {
+    codes.push(prefix + number);
   }
 
   return codes;
@@ -1043,24 +1511,71 @@ function buildQuestionCodeLine(questionCode, index) {
   return "T" + cleanCode + "^" + index;
 }
 
-function buildTableOptions(questionType, useST, projectType) {
-  const setting = projectSettings[projectType] || projectSettings.N2;
+function buildTableOptions(
+  questionType,
+  useST,
+  useRank,
+  projectType
+) {
+  const setting =
+    projectSettings[projectType] ||
+    projectSettings.N2;
 
-  let options = setting.tableOptionsByType[questionType];
+  let options =
+    setting.tableOptionsByType[questionType];
 
   if (!options) {
-    options = setting.tableOptionsByType.single_choice;
+    options =
+      setting.tableOptionsByType.single_choice;
   }
 
-  let optionArray = options.split(",");
+  let optionArray = String(options || "")
+    .split(",")
+    .map(option => option.trim())
+    .filter(option => option !== "");
 
-  if (useST && !optionArray.includes("ST")) {
+  /*
+    Xóa OD khỏi vị trí cũ trước.
+    Ranking Table hiện đã có OD trong projectSettings,
+    nên cần xóa để thêm lại ở cuối.
+  */
+  optionArray = optionArray.filter(
+    option => option !== "OD"
+  );
+
+  /*
+    Xử lý ST trước.
+  */
+  if (
+    useST === true &&
+    !optionArray.includes("ST")
+  ) {
     optionArray.push("ST");
   }
 
-  if (!useST && questionType !== "array") {
-    optionArray = optionArray.filter(option => option !== "ST");
+  if (
+    useST !== true &&
+    questionType !== "array"
+  ) {
+    optionArray = optionArray.filter(
+      option => option !== "ST"
+    );
   }
+
+  /*
+    Chỉ sau khi xử lý tất cả option xong
+    mới thêm OD, để OD luôn ở cuối cùng.
+  */
+ const rankEnabled =
+  useRank === true ||
+  (
+    useRank === undefined &&
+    questionType === "ranking_table"
+  );
+
+if (rankEnabled) {
+  optionArray.push("OD");
+}
 
   return optionArray.join(",");
 }
@@ -1084,20 +1599,39 @@ function getQuestionNumber(questionCode) {
 }
 
 function buildQuestionTextLine(table) {
+  /*
+    Chuẩn hóa lại khi generate output.
+    Nhờ vậy các table cũ cũng được xóa V3., Q6., 6....
+  */
+  const cleanQuestionText =
+    normalizeQuestionText(
+      table.questionText
+    );
+
   if (table.questionType === "listout_table") {
-    return " " + formatListoutTitle(table.questionText);
+    return " " + formatListoutTitle(
+      cleanQuestionText
+    );
   }
 
   if (
     table.questionType === "summary_table" ||
     table.questionType === "ranking_table"
   ) {
-    return " " + table.questionText.trim();
+    return " " + cleanQuestionText;
   }
 
-  const questionNumber = getQuestionNumber(table.questionCode);
+  const questionNumber =
+    getQuestionNumber(
+      table.questionCode
+    );
 
-  return " QUESTION " + questionNumber + ":|" + table.questionText.trim();
+  return (
+    " QUESTION " +
+    questionNumber +
+    ":|" +
+    cleanQuestionText
+  );
 }
 
 function getTnValue(questionType, projectType) {
@@ -1259,16 +1793,24 @@ function buildListoutManualSectionLines(text) {
       const indent = row.isGroup ? "   " : "    ";
       const spaceBeforeParen = row.isGroup ? "" : " ";
 
-      lines.push(
-        indent +
-        row.label.padEnd(18) +
-        "^     " +
-        row.variable +
-        spaceBeforeParen +
-        "(" +
-        row.code +
-        ")"
-      );
+    const logic =
+  row.variable +
+  spaceBeforeParen +
+  "(" +
+  row.code +
+  ")";
+
+lines.push(
+  formatSyntaxRow(
+    row.label,
+    logic,
+    {
+      indent,
+      logicColumn: 28,
+      addTrailingCaret: false
+    }
+  )
+);
     });
   });
 
@@ -1301,17 +1843,22 @@ function buildListoutVersionLines(extraRowsText) {
 
   const extraRows = parsePipeRows(extraRowsText);
 
-  extraRows.forEach(row => {
-    lines.push(
-      "   " +
-      row.label.padEnd(18) +
-      "^     " +
+extraRows.forEach(row => {
+  lines.push(
+    formatSyntaxRow(
+      row.label,
       row.variable +
-      " (" +
-      row.code +
-      ")"
-    );
-  });
+        " (" +
+        row.code +
+        ")",
+      {
+        indent: "   ",
+        logicColumn: 28,
+        addTrailingCaret: false
+      }
+    )
+  );
+});
 
   return lines;
 }
@@ -1328,17 +1875,22 @@ function buildListoutModeLines(extraRowsText) {
 
   const extraRows = parsePipeRows(extraRowsText);
 
-  extraRows.forEach(row => {
-    lines.push(
-      "   " +
-      row.label.padEnd(18) +
-      "^     " +
+extraRows.forEach(row => {
+  lines.push(
+    formatSyntaxRow(
+      row.label,
       row.variable +
-      " (" +
-      row.code +
-      ")"
-    );
-  });
+        " (" +
+        row.code +
+        ")",
+      {
+        indent: "   ",
+        logicColumn: 28,
+        addTrailingCaret: false
+      }
+    )
+  );
+});
 
   return lines;
 }
@@ -1419,15 +1971,22 @@ function buildListoutDateLines(dateVariable, startDateText, endDateText) {
     const code = formatYYYYMMDD(current);
     const label = formatListoutDateLabel(current);
 
-    lines.push(
-      "   " +
-      label.padEnd(20) +
-      "^     " +
-      variable +
-      " (" +
-      code +
-      ")"
-    );
+    extraRows.forEach(row => {
+  lines.push(
+    formatSyntaxRow(
+      row.label,
+      row.variable +
+        " (" +
+        row.code +
+        ")",
+      {
+        indent: "   ",
+        logicColumn: 28,
+        addTrailingCaret: false
+      }
+    )
+  );
+});
 
     current.setDate(current.getDate() + 1);
   }
@@ -1491,13 +2050,62 @@ function buildRowTemplateLines(table) {
 
 function cleanAnswerLabel(label) {
   return String(label || "")
-    .replace(/\s*\(DO NOT READ\)/gi, "")
-    .replace(/\s*\(DNR\)/gi, "")
+    /*
+      Xóa tất cả nội dung nằm trong dấu ngoặc tròn.
+
+      Ví dụ:
+      DON'T KNOW (DNR/NOT ONLINE)
+      => DON'T KNOW
+
+      OTHER (SPECIFY)
+      => OTHER
+
+      YES (IF YES, CONTINUE)
+      => YES
+    */
+    .replace(/\s*\([^()]*\)/g, "")
+
+    /*
+      Gộp khoảng trắng thừa sau khi xóa.
+    */
+    .replace(/[\t\u00A0 ]+/g, " ")
     .trim()
     .toUpperCase();
 }
 
-function buildRowsFromAnswerOptions(answerOptionsText, questionCode, netGroups = []) {
+function cleanAnswerOptionsText(value) {
+  return String(value || "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map(line => {
+      const trimmedLine = line.trim();
+
+      if (!trimmedLine) {
+        return "";
+      }
+
+      const match = trimmedLine.match(
+        /^(\d+)\s+(.+)$/
+      );
+
+      if (!match) {
+        return cleanAnswerLabel(trimmedLine);
+      }
+
+      const code = match[1];
+      const label = cleanAnswerLabel(match[2]);
+
+      return code + "\t" + label;
+    })
+    .join("\n")
+    .trim();
+}
+
+function buildRowsFromAnswerOptions(
+  answerOptionsText,
+  questionCode,
+  netGroups = []
+) {
   if (!answerOptionsText) {
     return [];
   }
@@ -1508,27 +2116,40 @@ function buildRowsFromAnswerOptions(answerOptionsText, questionCode, netGroups =
     .filter(line => line !== "");
 
   return lines.map(line => {
-    const match = line.match(/^(\d+)\s+(.+)$/);
+    const match = line.match(
+      /^(\d+)\s+(.+)$/
+    );
 
     if (!match) {
-      return " *** ERROR: INVALID ANSWER OPTION - " + line + " ***";
+      return (
+        " *** ERROR: INVALID ANSWER OPTION - " +
+        line +
+        " ***"
+      );
     }
 
     const code = match[1];
-    const label = cleanAnswerLabel(match[2]);
+    const label = cleanAnswerLabel(
+      match[2]
+    );
 
-    const shouldIndent = isAnswerCodeInsideNetGroups(code, netGroups);
+    const shouldIndent =
+      isAnswerCodeInsideNetGroups(
+        code,
+        netGroups
+      );
 
-    const indent = shouldIndent ? "   " : " ";
+    const indent = shouldIndent
+      ? "   "
+      : " ";
 
-    return (
-      indent +
-      label.padEnd(30) +
-      "^ " +
-      questionCode +
-      " (" +
-      code +
-      ") ^"
+    return formatSyntaxRow(
+      label,
+      questionCode + " (" + code + ")",
+      {
+        indent,
+        logicColumn: 34
+      }
     );
   });
 }
@@ -1557,61 +2178,606 @@ function parseAnswerOptions(answerOptionsText) {
     .filter(item => item !== null);
 }
 
+function isMeanSupportedQuestionType(
+  questionType
+) {
+  return isKnownQuestionType(
+    questionType
+  );
+}
+
+function parseMeanCodeInput(value) {
+  const clean = String(value || "")
+    .trim()
+    .replace(/[–—:]/g, "-")
+    .replace(/\s+/g, "");
+
+  if (!clean) {
+    return [];
+  }
+
+  const codes = [];
+
+  const tokens = clean
+    .split(",")
+    .filter(token => token !== "");
+
+  for (const token of tokens) {
+    /*
+      Single code:
+      5
+      99
+    */
+    if (/^\d+$/.test(token)) {
+      codes.push(Number(token));
+      continue;
+    }
+
+    /*
+      Range:
+      1-10
+      10-1
+    */
+    const rangeMatch = token.match(
+      /^(\d+)-(\d+)$/
+    );
+
+    if (!rangeMatch) {
+      return null;
+    }
+
+    const start = Number(rangeMatch[1]);
+    const end = Number(rangeMatch[2]);
+
+    const low = Math.min(start, end);
+    const high = Math.max(start, end);
+
+    for (
+      let code = low;
+      code <= high;
+      code++
+    ) {
+      codes.push(code);
+    }
+  }
+
+  return [
+    ...new Set(codes)
+  ].sort((a, b) => a - b);
+}
+
+function compressMeanCodes(codes) {
+  const numbers = [
+    ...new Set(
+      codes
+        .map(code => Number(code))
+        .filter(code => Number.isFinite(code))
+    )
+  ].sort((a, b) => a - b);
+
+  if (numbers.length === 0) {
+    return "";
+  }
+
+  const ranges = [];
+
+  let rangeStart = numbers[0];
+  let previous = numbers[0];
+
+  for (
+    let index = 1;
+    index < numbers.length;
+    index++
+  ) {
+    const current = numbers[index];
+
+    if (current === previous + 1) {
+      previous = current;
+      continue;
+    }
+
+    ranges.push(
+      rangeStart === previous
+        ? String(rangeStart)
+        : rangeStart + "-" + previous
+    );
+
+    rangeStart = current;
+    previous = current;
+  }
+
+  ranges.push(
+    rangeStart === previous
+      ? String(rangeStart)
+      : rangeStart + "-" + previous
+  );
+
+  return ranges.join(",");
+}
+
+function normalizeMeanCodeRange(value) {
+  const codes = parseMeanCodeInput(value);
+
+  if (!codes || codes.length === 0) {
+    return "";
+  }
+
+  return compressMeanCodes(codes);
+}
+
+function getMeanCodesFromTemplate(rowType) {
+  const normalizedRowType =
+    normalizeRowType(rowType);
+
+  const template =
+    rowTemplates[normalizedRowType] || [];
+
+  return template
+    .map(line => {
+      if (isDSLine(line)) {
+        return null;
+      }
+
+      const parts =
+        String(line || "").split("^");
+
+      const logic =
+        String(parts[1] || "").trim();
+
+      /*
+        Chỉ lấy code đơn:
+        {VAR} (10)
+
+        Không lấy Total:
+        {VAR} (8-10)
+      */
+      const match = logic.match(
+        /^\{VAR\}\s*\(\s*(\d+)\s*\)$/i
+      );
+
+      return match ? match[1] : null;
+    })
+    .filter(code => code !== null);
+}
+
+function getMeanCodesFromDemographicTemplate(
+  rowType
+) {
+  const normalizedRowType =
+    normalizeRowType(rowType);
+
+  const template =
+    demographicTemplates[
+      normalizedRowType
+    ] || [];
+
+  const codes = [];
+
+  template.forEach(line => {
+    if (isDSLine(line)) {
+      return;
+    }
+
+    const parts =
+      String(line || "").split("^");
+
+    const logic =
+      String(parts[1] || "");
+
+    /*
+      Chỉ lấy code đơn:
+      {VAR} (1)
+      {VAR} (2)
+
+      Không lấy:
+      {VAR} (1-3)
+    */
+    const matches = [
+      ...logic.matchAll(
+        /\{VAR\}\s*\(\s*(\d+)\s*\)/gi
+      )
+    ];
+
+    matches.forEach(match => {
+      codes.push(match[1]);
+    });
+  });
+
+  return [...new Set(codes)];
+}
+
+function getMeanAvailableCodesFromCurrentInput() {
+  const questionType =
+    questionTypeSelect.value;
+
+  const rowType =
+    normalizeRowType(
+      rowTypeSelect.value
+    );
+
+  /*
+    Single Choice và Array.
+  */
+  if (
+    questionType === "single_choice" ||
+    questionType === "array"
+  ) {
+    if (rowType === "custom_code") {
+      return parseAnswerOptions(
+        answerOptionsInput.value
+      ).map(option => option.code);
+    }
+
+    return getMeanCodesFromTemplate(
+      rowTypeSelect.value
+    );
+  }
+
+  /*
+    Multiple Choice lấy code từ Answer Options.
+  */
+  if (
+    questionType === "multiple_choice"
+  ) {
+    return parseAnswerOptions(
+      answerOptionsInput.value
+    ).map(option => option.code);
+  }
+
+  /*
+    Demographic.
+  */
+  if (
+    questionType === "demographic"
+  ) {
+    if (rowType === "custom_code") {
+      return parseAnswerOptions(
+        answerOptionsInput.value
+      ).map(option => option.code);
+    }
+
+    return getMeanCodesFromDemographicTemplate(
+      rowTypeSelect.value
+    );
+  }
+
+  /*
+    Summary, Ranking và Listout không có
+    một Answer Options chung để kiểm tra.
+
+    Trả null nghĩa là chỉ validate format range.
+  */
+  return null;
+}
+
+function toggleMeanSetupUI() {
+  const questionType =
+    questionTypeSelect.value;
+
+  const supported =
+    isMeanSupportedQuestionType(
+      questionType
+    );
+
+  if (!supported) {
+    sharedMeanSetupBox.classList.add(
+      "hidden"
+    );
+
+    meanSetupBox.classList.add(
+      "hidden"
+    );
+
+    useMeanCheckbox.checked = false;
+    meanCodeRangeInput.value = "";
+
+    return;
+  }
+
+  /*
+    Hiện checkbox Active MEAN.
+  */
+  sharedMeanSetupBox.classList.remove(
+    "hidden"
+  );
+
+  /*
+    Chỉ hiện ô nhập range khi được tick.
+  */
+  if (useMeanCheckbox.checked) {
+    meanSetupBox.classList.remove(
+      "hidden"
+    );
+  } else {
+    meanSetupBox.classList.add(
+      "hidden"
+    );
+  }
+}
+
 function normalizeCustomCodeRange(value) {
   return String(value || "")
     .trim()
     .replace(/:/g, "-");
 }
 
+function normalizeCustomNetLogic(logicText) {
+  return String(logicText || "")
+    /*
+      Đồng nhất các loại dấu gạch ngang.
+    */
+    .replace(/[–—]/g, "-")
+
+    /*
+      Convert:
+      Q13:1-3 => Q13(1-3)
+      Q14:1   => Q14(1)
+
+      Đồng thời hỗ trợ:
+      M1:1-2
+      D1B:3
+      BALLOT_A:1-2
+    */
+    .replace(
+      /\b([A-Z][A-Z0-9_]*)\s*:\s*([0-9,\-]+)\b/gi,
+      function (_, variable, codes) {
+        return (
+          variable.toUpperCase() +
+          "(" +
+          codes +
+          ")"
+        );
+      }
+    )
+
+    /*
+      Convert toán tử sang WinCross:
+      OR  => or
+      AND => &
+    */
+    .replace(/\bAND\b/gi, "&")
+    .replace(/\bOR\b/gi, "or")
+
+    /*
+      Chuẩn hóa khoảng trắng.
+    */
+    .replace(/\s*&\s*/g, " & ")
+    .replace(/\s+or\s+/gi, " or ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function parseCustomNetGroups(text) {
-  if (!text.trim()) {
+  if (!String(text || "").trim()) {
     return [];
   }
 
-  return text
+  return String(text)
     .split("\n")
     .map(line => line.trim())
     .filter(line => line !== "")
     .map(line => {
       /*
-        New format giống Answer Options:
-        1-2 TOTAL YES
-        3-4 TOTAL NO
-        1:2 TOTAL YES
-        3:4 TOTAL NO
+        ========================================
+        FORMAT 1 — Dùng dấu |
+        ========================================
 
-        Still support old format:
+        Format cũ:
         TOTAL YES | 1-2
-        TOTAL NO | 3-4
-      */
 
+        Format mới:
+        TOTAL KIGGANS | Q13:1-3 OR Q14:1
+      */
       if (line.includes("|")) {
-        const parts = line.split("|").map(part => part.trim());
+        const parts = line
+          .split("|")
+          .map(part => part.trim());
 
         if (parts.length < 2) {
           return null;
         }
 
+        const label = String(parts[0] || "")
+          .trim()
+          .toUpperCase();
+
+        const rawDefinition = parts
+          .slice(1)
+          .join(" | ")
+          .trim();
+
+        if (!label || !rawDefinition) {
+          return null;
+        }
+
+        /*
+          Nếu phần sau chứa variable logic như:
+          Q13:1-3
+          M1:1
+          D1B:1-4
+        */
+        const containsExplicitLogic =
+          /\b[A-Z][A-Z0-9_]*\s*:\s*[0-9]/i
+            .test(rawDefinition);
+
+        if (containsExplicitLogic) {
+          return {
+            type: "logic",
+            label,
+            logic: normalizeCustomNetLogic(
+              rawDefinition
+            ),
+            range: "",
+            options: "L-,SX"
+          };
+        }
+
+        /*
+          Nếu không có variable logic thì xem là
+          format range cũ.
+        */
         return {
-        label: String(parts[0] || "").trim().toUpperCase(),
-        range: normalizeCustomCodeRange(parts[1]),
-        options: "L-,SX"
-      };
+          type: "range",
+          label,
+          range: normalizeCustomCodeRange(
+            rawDefinition
+          ),
+          logic: "",
+          options: "L-,SX"
+        };
       }
 
-      const match = line.match(/^([0-9]+(?:[-:,][0-9]+)*)\s+(.+)$/);
+      /*
+        ========================================
+        FORMAT 2 — Label + explicit logic
+        ========================================
 
-      if (!match) {
+        TOTAL KIGGANS/LEAN KIGGANS
+        Q13:1-3 OR Q14:1
+
+        Có thể phân cách bằng:
+        - Tab
+        - Nhiều dấu cách
+      */
+      const explicitLogicIndex = line.search(
+        /\b[A-Z][A-Z0-9_]*\s*:\s*[0-9]/i
+      );
+
+      if (explicitLogicIndex > 0) {
+        const label = line
+          .slice(0, explicitLogicIndex)
+          .trim()
+          .toUpperCase();
+
+        const rawLogic = line
+          .slice(explicitLogicIndex)
+          .trim();
+
+        if (!label || !rawLogic) {
+          return null;
+        }
+
+        return {
+          type: "logic",
+          label,
+          logic: normalizeCustomNetLogic(
+            rawLogic
+          ),
+          range: "",
+          options: "L-,SX"
+        };
+      }
+
+      /*
+        ========================================
+        FORMAT 3 — Range + Label cũ
+        ========================================
+
+        1-2 TOTAL YES
+        3-4 TOTAL NO
+        1:2 TOTAL YES
+        1,3-5 TOTAL GROUP
+      */
+      const rangeMatch = line.match(
+        /^([0-9]+(?:[-:,][0-9]+)*)\s+(.+)$/
+      );
+
+      if (!rangeMatch) {
         return null;
       }
 
       return {
-        range: normalizeCustomCodeRange(match[1]),
-        label: match[2].trim().toUpperCase(),
+        type: "range",
+        range: normalizeCustomCodeRange(
+          rangeMatch[1]
+        ),
+        label: rangeMatch[2]
+          .trim()
+          .toUpperCase(),
+        logic: "",
         options: "L-,SX"
       };
     })
-    .filter(item => item !== null && item.label !== "" && item.range !== "");
+    .filter(item => {
+      if (!item || !item.label) {
+        return false;
+      }
+
+      if (item.type === "logic") {
+        return Boolean(item.logic);
+      }
+
+      return Boolean(item.range);
+    });
+}
+
+function countCustomNetLogicTerms(logicText) {
+  const matches = String(logicText || "").match(
+    /\b[A-Z][A-Z0-9_]*\s*\([^)]+\)/gi
+  );
+
+  return matches ? matches.length : 0;
+}
+
+function formatCustomNetGroupLogic(group, questionCode) {
+  /*
+    Explicit logic:
+    Q13:1-3 OR Q14:1
+  */
+  if (group.logic) {
+    let normalizedLogic =
+      normalizeCustomNetLogic(group.logic);
+
+    /*
+      Bỏ dấu {} bên ngoài nếu dữ liệu cũ
+      đã được lưu kèm dấu ngoặc nhọn.
+    */
+    normalizedLogic = normalizedLogic
+      .replace(/^\{\s*/, "")
+      .replace(/\s*\}$/, "")
+      .trim();
+
+    const termCount =
+      countCustomNetLogicTerms(normalizedLogic);
+
+    const hasBooleanOperator =
+      /\s(?:or|&)\s/i.test(normalizedLogic);
+
+    const hasComplexLogic =
+      /\bnot\b/i.test(normalizedLogic) ||
+      /[{}]/.test(normalizedLogic);
+
+    /*
+      Quy tắc mới:
+
+      1–2 điều kiện:
+      Q13(1-3) or Q14(1)
+
+      Từ 3 điều kiện trở lên:
+      {Q13(1-3) or Q14(1) or Q15(2)}
+    */
+    if (
+      hasBooleanOperator &&
+      (termCount > 2 || hasComplexLogic)
+    ) {
+      return "{" + normalizedLogic + "}";
+    }
+
+    return normalizedLogic;
+  }
+
+  /*
+    Range cũ:
+    1-3 TOTAL YES
+    =>
+    Q13 (1-3)
+  */
+  return (
+    questionCode +
+    " (" +
+    group.range +
+    ")"
+  );
 }
 
 function expandCodeRange(rangeText) {
@@ -1644,40 +2810,83 @@ function expandCodeRange(rangeText) {
   return codes;
 }
 
-function isAnswerCodeInsideNetGroups(answerCode, netGroups) {
+function isAnswerCodeInsideNetGroups(
+  answerCode,
+  netGroups
+) {
   return netGroups.some(group => {
-    const codes = expandCodeRange(group.range);
-    return codes.includes(String(answerCode));
+    /*
+      Explicit logic không có range trực tiếp
+      của Answer Options hiện tại.
+    */
+    if (!group.range) {
+      return false;
+    }
+
+    const codes = expandCodeRange(
+      group.range
+    );
+
+    return codes.includes(
+      String(answerCode)
+    );
   });
 }
 
 function buildCustomDSSetup() {
-  const netGroups = useCustomNetGroupsCheckbox.checked
-    ? parseCustomNetGroups(customNetGroupsInput.value)
-    : [];
+  let dsChoices = [];
 
-  const answerOptions = parseAnswerOptions(answerOptionsInput.value);
+  const questionType = questionTypeSelect.value;
+  const rowType = normalizeRowType(
+    rowTypeSelect.value
+  );
 
-  const dsChoices = [
-    ...netGroups.map((group, index) => {
-      return {
-        type: "net",
-        label: group.label,
-        rowNumber: index + 2
-      };
-    }),
+  /*
+    Nhánh mới: predefined demographic.
+  */
+  if (
+    questionType === "demographic" &&
+    rowType !== "custom_code"
+  ) {
+    dsChoices = getDemographicDSChoices();
+  } else {
+    /*
+      Logic cũ cho Custom Code,
+      Multiple Choice và Array.
+    */
+    const netGroups = useCustomNetGroupsCheckbox.checked
+      ? parseCustomNetGroups(customNetGroupsInput.value)
+      : [];
 
-    ...answerOptions.map((option, index) => {
-      return {
-        type: "answer",
-        label: option.label,
-        rowNumber: netGroups.length + index + 2
-      };
-    })
-  ];
+    const answerOptions = parseAnswerOptions(
+      answerOptionsInput.value
+    );
 
-  if (dsChoices.length === 0) {
-    alert("Please enter Total / Net Groups or Answer Options first.");
+    dsChoices = [
+      ...netGroups.map((group, index) => {
+        return {
+          type: "net",
+          label: group.label,
+          rowNumber: index + 2
+        };
+      }),
+
+      ...answerOptions.map((option, index) => {
+        return {
+          type: "answer",
+          label: option.label,
+          rowNumber:
+            netGroups.length + index + 2
+        };
+      })
+    ];
+  }
+
+  if (dsChoices.length < 2) {
+    alert(
+      "Please enter or select at least two rows for D/S."
+    );
+
     return;
   }
 
@@ -1685,48 +2894,155 @@ function buildCustomDSSetup() {
   customDSNegativeSelect.innerHTML = "";
 
   dsChoices.forEach(choice => {
-    const value = choice.type + "|" + choice.label + "|" + choice.rowNumber;
+    const value =
+      choice.type +
+      "|" +
+      choice.label +
+      "|" +
+      choice.rowNumber;
 
-    const positiveOption = document.createElement("option");
+    const positiveOption =
+      document.createElement("option");
+
     positiveOption.value = value;
     positiveOption.textContent = choice.label;
 
-    const negativeOption = document.createElement("option");
+    const negativeOption =
+      document.createElement("option");
+
     negativeOption.value = value;
     negativeOption.textContent = choice.label;
 
-    customDSPositiveSelect.appendChild(positiveOption);
-    customDSNegativeSelect.appendChild(negativeOption);
+    customDSPositiveSelect.appendChild(
+      positiveOption
+    );
+
+    customDSNegativeSelect.appendChild(
+      negativeOption
+    );
   });
 
-  if (dsChoices.length >= 2) {
-    customDSPositiveSelect.value =
-      dsChoices[0].type + "|" + dsChoices[0].label + "|" + dsChoices[0].rowNumber;
+  /*
+    Tạm thời chọn row đầu và row cuối.
+    Phần dưới sẽ xử lý default từ template.
+  */
+  customDSPositiveSelect.selectedIndex = 0;
+  customDSNegativeSelect.selectedIndex =
+    dsChoices.length - 1;
 
-    customDSNegativeSelect.value =
-      dsChoices[dsChoices.length - 1].type +
-      "|" +
-      dsChoices[dsChoices.length - 1].label +
-      "|" +
-      dsChoices[dsChoices.length - 1].rowNumber;
-  }
+  setDemographicDefaultDSSelection(dsChoices);
 
   customDSBox.classList.remove("hidden");
 }
 
+function getTemplateDSRowNumbers(rowType) {
+  const normalizedRowType =
+    normalizeRowType(rowType);
+
+  const template =
+    demographicTemplates[normalizedRowType];
+
+  if (!template) {
+    return null;
+  }
+
+  const dsLine = template.find(line => {
+    return isDSLine(line);
+  });
+
+  if (!dsLine) {
+    return null;
+  }
+
+  const match = dsLine.match(
+    /CALC\s+F(\d+)-F(\d+)/i
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    positiveRowNumber: Number(match[1]),
+    negativeRowNumber: Number(match[2])
+  };
+}
+
+function setDemographicDefaultDSSelection(
+  dsChoices
+) {
+  if (
+    questionTypeSelect.value !== "demographic"
+  ) {
+    return;
+  }
+
+  const defaultRows =
+    getTemplateDSRowNumbers(
+      rowTypeSelect.value
+    );
+
+  if (!defaultRows) {
+    return;
+  }
+
+  const positiveChoice = dsChoices.find(
+    choice => {
+      return (
+        choice.rowNumber ===
+        defaultRows.positiveRowNumber
+      );
+    }
+  );
+
+  const negativeChoice = dsChoices.find(
+    choice => {
+      return (
+        choice.rowNumber ===
+        defaultRows.negativeRowNumber
+      );
+    }
+  );
+
+  if (positiveChoice) {
+    customDSPositiveSelect.value =
+      positiveChoice.type +
+      "|" +
+      positiveChoice.label +
+      "|" +
+      positiveChoice.rowNumber;
+  }
+
+  if (negativeChoice) {
+    customDSNegativeSelect.value =
+      negativeChoice.type +
+      "|" +
+      negativeChoice.label +
+      "|" +
+      negativeChoice.rowNumber;
+  }
+}
+
 function buildCustomNetGroupLines(table) {
-  const netGroups = table.customNetGroups || [];
+  const netGroups =
+    table.customNetGroups || [];
 
   return netGroups.map(group => {
-    return (
-      " " +
-      group.label.padEnd(30) +
-      "^ " +
-      table.questionCode +
-      " (" +
-      group.range +
-      ") ^" +
-      group.options
+    const logic =
+      formatCustomNetGroupLogic(
+        group,
+        table.questionCode
+      );
+
+    return formatSyntaxRow(
+      group.label,
+      logic,
+      {
+        indent: " ",
+        logicColumn: 34,
+        suffix:
+          group.options || "L-,SX"
+      }
     );
   });
 }
@@ -1771,169 +3087,85 @@ function buildCustomDSLine(table) {
 }
 
 function normalizeSummaryTitle(title) {
-  return title
+  return String(title || "")
     .replace(/[–—]/g, "-")
     .replace(/\s+-\s+/g, " ")
-    .replace(/\bD\/S\b/g, "(D/S)")
+    .replace(/\bD\/S\b/gi, "(D/S)")
     .replace(/\s+/g, " ")
     .trim();
 }
 
 function normalizeSummaryLabel(label) {
-  return label
+  return String(label || "")
     .replace(/^TOTAL\s+/i, "TOT ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-function parseSummaryRawText(rawText) {
-  const lines = rawText
-    .split("\n")
-    .map(line => line.trim())
-    .filter(line => line !== "");
+/*
+  Chuyển source code dạng:
 
-  const blocks = [];
-  let currentBlock = null;
+  Q1       => ["Q1"]
+  SEN      => ["SEN"]
+  D1B      => ["D1B"]
+  Q1/2     => ["Q1", "Q2"]
+  Q34/35   => ["Q34", "Q35"]
+  SEN/GOV  => ["SEN", "GOV"]
+*/
+function expandSummarySourceCodes(sourceText) {
+  const clean = String(sourceText || "")
+    .trim()
+    .replace(/\.$/, "")
+    .toUpperCase();
 
-  lines.forEach(line => {
-    const block = parseSummaryBlockHeader(line);
+  if (!clean) {
+    return [];
+  }
 
-    if (block) {
-      currentBlock = block;
-      blocks.push(currentBlock);
-      return;
+  const parts = clean
+    .split("/")
+    .map(part => part.trim())
+    .filter(part => part !== "");
+
+  if (parts.length === 1) {
+    return parts;
+  }
+
+  /*
+    Với Q1/2, phần đầu là Q1 và phần sau chỉ là 2.
+    App tự kế thừa prefix Q.
+  */
+  const firstMatch = parts[0].match(/^([A-Z_]+)(\d+)$/);
+
+  if (!firstMatch) {
+    return parts;
+  }
+
+  const prefix = firstMatch[1];
+
+  return parts.map(part => {
+    if (/^\d+$/.test(part)) {
+      return prefix + part;
     }
 
-    if (!currentBlock) {
-      currentBlock = {
-        sourceCode: "",
-        title: "SUMMARY BLOCK",
-        dsPositiveCode: "",
-        dsNegativeCode: "",
-        rows: [],
-        warnings: []
-      };
-
-      blocks.push(currentBlock);
-    }
-
-    const row = parseSummaryRowLine(line, currentBlock.sourceCode);
-
-    if (row) {
-      currentBlock.rows.push(row);
-    } else {
-      currentBlock.warnings.push(line);
-    }
+    return part;
   });
-
-  return blocks;
-}
-
-function parseSummaryBlockHeader(line) {
-  /*
-    Đọc được:
-    Q1/2. COMB INITIAL BALLOT D/S (:1-2 MINUS 6-7)
-    Q34/35. FINAL BALLOT D/S (:1-2 MINUS 6-7)
-    Q1/2 COMB INITIAL BALLOT D/S
-  */
-  const match = line.match(/^(Q?\d+(?:\/\d+)*)\.?\s+(.+)$/i);
-
-  if (!match) {
-    return null;
-  }
-
-  const rawSource = match[1].replace(/^Q/i, "").trim();
-  let rawTitle = match[2].trim();
-
-  // Nếu phần sau có dạng Q...: thì đây có thể là row logic, không phải block title
-  if (/\bQ?\d+(?:\/\d+)*\s*:/i.test(rawTitle)) {
-    return null;
-  }
-
-  const dsInfo = extractSummaryDSInfo(rawTitle);
-
-  rawTitle = rawTitle
-    .replace(/\s*\(:.*?\)\s*$/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  return {
-    sourceCode: "Q" + rawSource,
-    title: normalizeSummaryTitle(rawTitle),
-    dsPositiveCode: dsInfo.positiveCode,
-    dsNegativeCode: dsInfo.negativeCode,
-    rows: [],
-    warnings: []
-  };
-}
-
-function extractSummaryDSInfo(title) {
-  const match = String(title || "").match(/\(:\s*([0-9,\-]+)\s*(?:MINUS|-)\s*:?\s*([0-9,\-]+)\s*\)/i);
-
-  if (!match) {
-    return {
-      positiveCode: "",
-      negativeCode: ""
-    };
-  }
-
-  return {
-    positiveCode: match[1].trim(),
-    negativeCode: match[2].trim()
-  };
-}
-
-function parseSummaryBlockHeader(line) {
-  /*
-    Supported:
-    Q1/2. COMB INITIAL BALLOT D/S (:1-2 MINUS 6-7)
-    Q1/2 COMB INITIAL BALLOT D/S
-    Q34/35. FINAL BALLOT D/S (:1-2 MINUS 6-7)
-    Q2/3 INIT BALLOT – COMB D/S
-  */
-
-  const match = line.match(/^(Q?\d+(?:\/\d+)*)\.?\s+(.+)$/i);
-
-  if (!match) {
-    return null;
-  }
-
-  const rawSource = match[1].replace(/^Q/i, "").trim();
-  let rawTitle = match[2].trim();
-
-  // Tránh nhận nhầm row cũ kiểu TOTAL YES Q1/2:1-2 làm block title.
-  if (/\bQ?\d+(?:\/\d+)*\s*:/i.test(rawTitle)) {
-    return null;
-  }
-
-  const dsInfo = extractSummaryDSInfo(rawTitle);
-
-  rawTitle = rawTitle
-    .replace(/\s*\(:.*?\)\s*$/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  return {
-    sourceCode: "Q" + rawSource,
-    title: normalizeSummaryTitle(rawTitle),
-    dsPositiveCode: dsInfo.positiveCode,
-    dsNegativeCode: dsInfo.negativeCode,
-    rows: [],
-    warnings: []
-  };
 }
 
 function extractSummaryDSInfo(title) {
   /*
-    Supported:
-    (:1-2 MINUS 6-7)
-    (:1-2 minus :6-7)
-    (:1-2 - 6-7)
-  */
+    Nhận các dạng:
 
+    (:1-2 MINUS :4-5)
+    (:1-2 MINUS 4-5)
+    (:1-2 - :4-5)
+    (:1 MINUS :2)
+  */
   const cleanTitle = String(title || "").trim();
 
-  const minusMatch = cleanTitle.match(/\(:\s*([0-9,\-]+)\s*(?:MINUS|-)\s*:?\s*([0-9,\-]+)\s*\)/i);
+  const minusMatch = cleanTitle.match(
+    /\(:\s*([0-9,\-]+)\s*(?:MINUS|-)\s*:?\s*([0-9,\-]+)\s*\)/i
+  );
 
   if (!minusMatch) {
     return {
@@ -1948,77 +3180,75 @@ function extractSummaryDSInfo(title) {
   };
 }
 
-function parseSummaryRowLine(line, sourceCode) {
+function parseSummaryBlockHeader(line) {
   /*
-    Format A:
-    TOTAL YES (:1-2)
-    TOTAL NO (:6-7)
-    LEAN/UND (:3-5)
-  */
-  const inheritMatch = line.match(/^(.+?)\s+\(:\s*([0-9,\-]+)\s*\)\s*$/i);
+    Nhận các dạng:
 
-  if (inheritMatch) {
-    return {
-      label: normalizeSummaryLabel(inheritMatch[1]),
-      logic: sourceCode + ":" + inheritMatch[2].trim()
-    };
+    Q1. GENERIC BALLOT D/S (:1-2 MINUS :4-5)
+    Q1/2. COMBINED BALLOT D/S (:1-2 MINUS :6-7)
+    Q1/2 COMBINED BALLOT D/S
+    SEN. REELECT SENATOR WARNER D/S (:1 MINUS :2)
+    SEN REELECT SENATOR WARNER D/S (:1 MINUS :2)
+    D1B. AGE GROUP
+    BALLOT_A. FINAL BALLOT D/S (:1-2 MINUS :6-7)
+  */
+  const cleanLine = String(line || "").trim();
+
+  const match = cleanLine.match(
+    /^([A-Z][A-Z0-9_]*(?:\/(?:[A-Z][A-Z0-9_]*|\d+))*)(\.)?\s+(.+)$/i
+  );
+
+  if (!match) {
+    return null;
   }
 
-  /*
-    Format B:
-    TOTAL YES Q1/2:1-2
-    TOTAL NO Q34/35:6-7
-  */
-  const oldLogicIndex = line.search(/\bQ?\d+(?:\/\d+)*\s*:/i);
-
-  if (oldLogicIndex !== -1) {
-    return {
-      label: normalizeSummaryLabel(line.slice(0, oldLogicIndex)),
-      logic: normalizeSummaryLogicText(line.slice(oldLogicIndex).trim())
-    };
-  }
+  const rawSource = match[1].trim();
+  const hasPeriod = Boolean(match[2]);
+  let rawTitle = match[3].trim();
 
   /*
-    Format C:
-    TOTAL YES Q1 (1-2) OR Q2 (1-2)
-    TOTAL NO Q1 (6-7) OR Q2 (6-7)
-  */
-  const parenLogicIndex = line.search(/\bQ\d+\s*\(/i);
+    Không có dấu chấm vẫn cho phép:
 
-  if (parenLogicIndex !== -1) {
-    return {
-      label: normalizeSummaryLabel(line.slice(0, parenLogicIndex)),
-      logic: normalizeSummaryLogicText(line.slice(parenLogicIndex).trim())
-    };
+    Q1 GENERIC BALLOT...
+    Q1/2 COMBINED BALLOT...
+    SEN REELECT ... D/S
+
+    Nhưng tránh nhận nhầm row thông thường làm block title.
+  */
+  const looksLikeQCode = /^Q\d/i.test(rawSource);
+  const titleHasDS = /\bD\/S\b/i.test(rawTitle);
+
+  if (!hasPeriod && !looksLikeQCode && !titleHasDS) {
+    return null;
   }
+
+  const dsInfo = extractSummaryDSInfo(rawTitle);
 
   /*
-    Format D:
-    MOVE TO YES ((Q1:3-7 OR Q2:3-7) AND (Q34:1-2 OR Q35:1-2))
+    Xóa phần D/S code ở cuối title:
+
+    REELECT SENATOR WARNER D/S (:1 MINUS :2)
+    =>
+    REELECT SENATOR WARNER D/S
   */
-  const doubleParenExpression = line.match(/^(.+?)\s+\(\((.+)\)\)\s*$/i);
+  rawTitle = rawTitle
+    .replace(/\s*\(:.*?\)\s*$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 
-  if (doubleParenExpression) {
-    return {
-      label: normalizeSummaryLabel(doubleParenExpression[1]),
-      logic: normalizeSummaryLogicText(doubleParenExpression[2].trim())
-    };
-  }
+  return {
+    sourceCode: rawSource
+      .replace(/\.$/, "")
+      .toUpperCase(),
 
-  /*
-    Format E:
-    MOVE TO YES (Q1:3-7 OR Q2:3-7)
-  */
-  const singleExpression = line.match(/^(.+?)\s+\((Q\d+:.+)\)\s*$/i);
+    title: normalizeSummaryTitle(rawTitle),
 
-  if (singleExpression) {
-    return {
-      label: normalizeSummaryLabel(singleExpression[1]),
-      logic: normalizeSummaryLogicText(singleExpression[2].trim())
-    };
-  }
+    dsPositiveCode: dsInfo.positiveCode,
+    dsNegativeCode: dsInfo.negativeCode,
 
-  return null;
+    rows: [],
+    warnings: []
+  };
 }
 
 function normalizeSummaryLogicText(logic) {
@@ -2031,72 +3261,252 @@ function normalizeSummaryLogicText(logic) {
     .trim();
 }
 
-function formatSimpleQGroup(token) {
-  const clean = token.trim();
-  const match = clean.match(/^Q?([\d\/]+)\s*:\s*([0-9,\-]+)$/i);
+function parseSummaryRowLine(line, sourceCode) {
+  /*
+    FORMAT A — kế thừa source code của block:
 
-  if (!match) {
-    return clean;
+    REELECT (:1)
+    NEW PERSON (:2)
+    NOT SURE (:3)
+
+    Nếu block là SEN, logic nội bộ sẽ thành:
+
+    SEN:1
+    SEN:2
+    SEN:3
+  */
+  const inheritMatch = line.match(
+    /^(.+?)\s+\(:\s*([0-9,\-]+)\s*\)\s*$/i
+  );
+
+  if (inheritMatch) {
+    return {
+      label: normalizeSummaryLabel(
+        inheritMatch[1]
+      ),
+
+      logic:
+        sourceCode +
+        ":" +
+        inheritMatch[2].trim()
+    };
   }
 
-  const nums = match[1].split("/");
-  const code = match[2].trim();
+  /*
+    FORMAT B — biểu thức được bọc bởi hai lớp ngoặc:
 
-  return nums.map((num, index) => {
-    if (index === 0) {
-      return "Q" + num + " (" + code + ")";
+    MOVE TO YES
+    ((Q1:3-7 OR Q2:3-7) AND (SEN:1 OR SEN:2))
+  */
+  const doubleParenExpression = line.match(
+    /^(.+?)\s+\(\((.+)\)\)\s*$/i
+  );
+
+  if (doubleParenExpression) {
+    return {
+      label: normalizeSummaryLabel(
+        doubleParenExpression[1]
+      ),
+
+      logic: normalizeSummaryLogicText(
+        doubleParenExpression[2].trim()
+      )
+    };
+  }
+
+  /*
+    FORMAT C — biểu thức được bọc bởi một lớp ngoặc:
+
+    MOVE TO YES (Q1:3-7 OR Q2:3-7)
+    REELECT SENATOR (SEN:1)
+  */
+  const singleExpression = line.match(
+    /^(.+?)\s+\((.+)\)\s*$/i
+  );
+
+  if (
+    singleExpression &&
+    /\b[A-Z][A-Z0-9_]*(?:\/(?:[A-Z][A-Z0-9_]*|\d+))*\s*:/i
+      .test(singleExpression[2])
+  ) {
+    return {
+      label: normalizeSummaryLabel(
+        singleExpression[1]
+      ),
+
+      logic: normalizeSummaryLogicText(
+        singleExpression[2].trim()
+      )
+    };
+  }
+
+  /*
+    FORMAT D — logic dùng dấu hai chấm:
+
+    REELECT SEN:1
+    TOTAL YES Q1/2:1-2
+    MOVED TO YES Q1:3-7 OR Q2:3-7
+  */
+  const colonLogicPattern =
+    /\b[A-Z][A-Z0-9_]*(?:\/(?:[A-Z][A-Z0-9_]*|\d+))*\s*:/i;
+
+  const colonLogicMatch = line.match(
+    colonLogicPattern
+  );
+
+  if (
+    colonLogicMatch &&
+    colonLogicMatch.index !== undefined
+  ) {
+    return {
+      label: normalizeSummaryLabel(
+        line.slice(0, colonLogicMatch.index)
+      ),
+
+      logic: normalizeSummaryLogicText(
+        line
+          .slice(colonLogicMatch.index)
+          .trim()
+      )
+    };
+  }
+
+  /*
+    FORMAT E — logic đã có ngoặc sẵn:
+
+    REELECT SEN (1)
+    TOTAL YES Q1 (1-2) OR Q2 (1-2)
+  */
+  const parenLogicPattern =
+    /\b[A-Z][A-Z0-9_]*\s*\([^)]+\)/i;
+
+  const parenLogicMatch = line.match(
+    parenLogicPattern
+  );
+
+  if (
+    parenLogicMatch &&
+    parenLogicMatch.index !== undefined
+  ) {
+    return {
+      label: normalizeSummaryLabel(
+        line.slice(0, parenLogicMatch.index)
+      ),
+
+      logic: normalizeSummaryLogicText(
+        line
+          .slice(parenLogicMatch.index)
+          .trim()
+      )
+    };
+  }
+
+  return null;
+}
+
+function parseSummaryRawText(rawText) {
+  const lines = String(rawText || "")
+    .split("\n")
+    .map(line => line.trim())
+    .filter(line => line !== "");
+
+  const blocks = [];
+  let currentBlock = null;
+
+  lines.forEach(line => {
+    const block = parseSummaryBlockHeader(line);
+
+    /*
+      Khi gặp Q1., SEN., D1B....
+      bắt đầu một Summary Block mới.
+    */
+    if (block) {
+      currentBlock = block;
+      blocks.push(currentBlock);
+      return;
     }
 
-    return "or Q" + num + " (" + code + ")";
-  }).join(" ");
+    /*
+      Fallback khi input không có block header.
+    */
+    if (!currentBlock) {
+      currentBlock = {
+        sourceCode: "",
+        title: "SUMMARY BLOCK",
+        dsPositiveCode: "",
+        dsNegativeCode: "",
+        rows: [],
+        warnings: []
+      };
+
+      blocks.push(currentBlock);
+    }
+
+    const row = parseSummaryRowLine(
+      line,
+      currentBlock.sourceCode
+    );
+
+    if (row) {
+      currentBlock.rows.push(row);
+    } else {
+      currentBlock.warnings.push(line);
+    }
+  });
+
+  return blocks;
 }
 
-function formatCompactQGroup(token) {
-  const clean = token.trim();
-  const match = clean.match(/^Q?([\d\/]+)\s*:\s*([0-9,\-]+)$/i);
+function formatSimpleSummaryGroup(token) {
+  /*
+    Q1:1-2
+    =>
+    Q1 (1-2)
+
+    Q1/2:1-2
+    =>
+    Q1 (1-2) or Q2 (1-2)
+
+    SEN:1
+    =>
+    SEN (1)
+  */
+  const clean = String(token || "").trim();
+
+  const match = clean.match(
+    /^([A-Z][A-Z0-9_]*(?:\/(?:[A-Z][A-Z0-9_]*|\d+))*)\s*:\s*([0-9,\-]+)$/i
+  );
 
   if (!match) {
     return clean;
   }
 
-  const nums = match[1].split("/");
+  const variables = expandSummarySourceCodes(
+    match[1]
+  );
+
   const code = match[2].trim();
 
-  return nums.map(num => {
-    return "Q" + num + "(" + code + ")";
-  }).join(" or ");
-}
+  return variables
+    .map((variable, index) => {
+      if (index === 0) {
+        return (
+          variable +
+          " (" +
+          code +
+          ")"
+        );
+      }
 
-function formatSummaryLogic(logic) {
-  const cleanLogic = String(logic || "").trim();
-
-  if (!cleanLogic) {
-    return "";
-  }
-
-  /*
-    Simple:
-    Q1/2:1-2
-    Q34/35:6-7
-  */
-  if (/^Q?\d+(?:\/\d+)*\s*:\s*[0-9,\-]+$/i.test(cleanLogic)) {
-    return formatSimpleQGroup(cleanLogic);
-  }
-
-  /*
-    Already near-WinCross:
-    Q1 (1-2) OR Q2 (1-2)
-  */
-  if (/\bQ\d+\s*\([^)]+\)/i.test(cleanLogic) && !cleanLogic.includes(":")) {
-    return formatAlreadyParenthesizedSummaryLogic(cleanLogic);
-  }
-
-  /*
-    Complex:
-    Q1:3-7 OR Q2:3-7 AND Q34:1-2 OR Q35:1-2
-    (Q1:3-7 OR Q2:3-7) AND (Q34:1-2 OR Q35:1-2)
-  */
-  return formatComplexSummaryExpression(cleanLogic);
+      return (
+        "or " +
+        variable +
+        " (" +
+        code +
+        ")"
+      );
+    })
+    .join(" ");
 }
 
 function formatAlreadyParenthesizedSummaryLogic(logic) {
@@ -2107,25 +3517,69 @@ function formatAlreadyParenthesizedSummaryLogic(logic) {
     .trim();
 }
 
-function formatComplexSummaryExpression(expression) {
-  let text = String(expression || "").trim();
+function convertSummaryExpressionTokens(text) {
+  /*
+    Chuyển tất cả source:code thành source(code):
 
-  text = text
+    Q1:1-2 => Q1(1-2)
+    SEN:1   => SEN(1)
+
+    Q1/2:1-2
+    =>
+    Q1(1-2) or Q2(1-2)
+  */
+  return String(text || "").replace(
+    /\b([A-Z][A-Z0-9_]*(?:\/(?:[A-Z][A-Z0-9_]*|\d+))*)\s*:\s*([0-9,\-]+)\b/gi,
+
+    function (_, source, codes) {
+      return expandSummarySourceCodes(source)
+        .map(variable => {
+          return (
+            variable +
+            "(" +
+            codes +
+            ")"
+          );
+        })
+        .join(" or ");
+    }
+  );
+}
+
+function formatComplexSummaryExpression(expression) {
+  let text = String(expression || "")
+    .trim()
     .replace(/\bAND\b/gi, "&")
     .replace(/\bOR\b/gi, "or");
 
   /*
-    Convert parenthesized groups:
-    (Q1:3-7 or Q2:3-7)
-    → {Q1(3-7) or Q2(3-7)}
+    Chuyển group:
+
+    (Q1:3-7 OR Q2:3-7)
+    =>
+    {Q1(3-7) or Q2(3-7)}
+
+    (SEN:1 OR SEN:2)
+    =>
+    {SEN(1) or SEN(2)}
   */
-  text = text.replace(/\(([^()]*Q\d+:[^()]*)\)/gi, function (_, groupContent) {
-    return "{" + convertSummaryExpressionTokens(groupContent) + "}";
-  });
+  text = text.replace(
+    /\(([^()]*(?:[A-Z][A-Z0-9_]*(?:\/(?:[A-Z][A-Z0-9_]*|\d+))*\s*:\s*[0-9,\-]+)[^()]*)\)/gi,
+
+    function (_, groupContent) {
+      return (
+        "{" +
+        convertSummaryExpressionTokens(
+          groupContent
+        ) +
+        "}"
+      );
+    }
+  );
 
   /*
-    Convert remaining Q tokens:
-    Q1:3-7 → Q1(3-7)
+    Convert các source:code còn lại
+    không nằm trong group.
   */
   text = convertSummaryExpressionTokens(text);
 
@@ -2136,10 +3590,55 @@ function formatComplexSummaryExpression(expression) {
     .trim();
 }
 
-function convertSummaryExpressionTokens(text) {
-  return String(text || "").replace(/\bQ(\d+)\s*:\s*([0-9,\-]+)\b/gi, function (_, qnum, codes) {
-    return "Q" + qnum + "(" + codes + ")";
-  });
+function formatSummaryLogic(logic) {
+  const cleanLogic = String(logic || "")
+    .trim();
+
+  if (!cleanLogic) {
+    return "";
+  }
+
+  /*
+    Logic đơn:
+
+    SEN:1
+    Q1:1-2
+    Q1/2:1-2
+  */
+  if (
+    /^[A-Z][A-Z0-9_]*(?:\/(?:[A-Z][A-Z0-9_]*|\d+))*\s*:\s*[0-9,\-]+$/i
+      .test(cleanLogic)
+  ) {
+    return formatSimpleSummaryGroup(
+      cleanLogic
+    );
+  }
+
+  /*
+    Logic đã có ngoặc:
+
+    SEN (1)
+    Q1 (1-2) OR Q2 (1-2)
+  */
+  if (
+    /\b[A-Z][A-Z0-9_]*\s*\([^)]+\)/i
+      .test(cleanLogic) &&
+    !cleanLogic.includes(":")
+  ) {
+    return formatAlreadyParenthesizedSummaryLogic(
+      cleanLogic
+    );
+  }
+
+  /*
+    Logic phức tạp:
+
+    Q1:3-7 OR Q2:3-7
+    (Q1:3-7 OR Q2:3-7) AND (SEN:1 OR SEN:2)
+  */
+  return formatComplexSummaryExpression(
+    cleanLogic
+  );
 }
 
 function buildSummarySetup() {
@@ -2263,50 +3762,176 @@ function getSummaryBlocksFromSetup() {
   });
 }
 
-function buildSummaryTableLines(summaryBlocks) {
+function buildSummaryTableLines(
+  summaryBlocks
+) {
   const lines = [];
   let currentRowNumber = 1;
 
   summaryBlocks.forEach(block => {
-    const positiveIndex = block.rows.findIndex(row => row.label === block.positiveLabel);
-    const negativeIndex = block.rows.findIndex(row => row.label === block.negativeLabel);
+    const positiveIndex =
+      block.rows.findIndex(
+        row =>
+          row.label ===
+          block.positiveLabel
+      );
 
-    const positiveRowNumber = positiveIndex >= 0 ? currentRowNumber + positiveIndex + 1 : currentRowNumber + 1;
-    const negativeRowNumber = negativeIndex >= 0 ? currentRowNumber + negativeIndex + 1 : currentRowNumber + 1;
+    const negativeIndex =
+      block.rows.findIndex(
+        row =>
+          row.label ===
+          block.negativeLabel
+      );
 
-    const calcText = "CALC F" + positiveRowNumber + "-F" + negativeRowNumber + ",V" + positiveRowNumber + "-V" + negativeRowNumber;
-    const suffixText = "^" + block.suffix;
+    const positiveRowNumber =
+      positiveIndex >= 0
+        ? currentRowNumber +
+          positiveIndex +
+          1
+        : currentRowNumber + 1;
+
+    const negativeRowNumber =
+      negativeIndex >= 0
+        ? currentRowNumber +
+          negativeIndex +
+          1
+        : currentRowNumber + 1;
+
+    const calcText =
+      "CALC F" +
+      positiveRowNumber +
+      "-F" +
+      negativeRowNumber +
+      ",V" +
+      positiveRowNumber +
+      "-V" +
+      negativeRowNumber;
 
     lines.push(
-      " " +
-      block.title.padEnd(24) +
-      "^        " +
-      calcText.padEnd(24) +
-      suffixText
+      formatSyntaxRow(
+        block.title,
+        calcText,
+        {
+          indent: " ",
+          logicColumn: 34,
+          suffix:
+            block.suffix || "SX,L-"
+        }
+      )
     );
 
     block.rows.forEach(row => {
-      const logic = formatSummaryLogic(row.logic);
+      const logic =
+        formatSummaryLogic(row.logic);
 
       lines.push(
-        "   " +
-        row.label.padEnd(22) +
-        "^ " +
-        logic.padEnd(28) +
-        "^"
+        formatSyntaxRow(
+          row.label,
+          logic,
+          {
+            indent: "   ",
+            logicColumn: 34
+          }
+        )
       );
     });
 
-    currentRowNumber += 1 + block.rows.length;
+    currentRowNumber +=
+      1 + block.rows.length;
   });
 
   return lines;
 }
 
+function collectSharedFeatureState() {
+  const useRank =
+    useRankCheckbox.checked === true;
+
+  const useMean =
+    useMeanCheckbox.checked === true;
+
+  /*
+    Không bật MEAN.
+  */
+  if (!useMean) {
+    return {
+      useRank,
+      useMean: false,
+      meanCodeRange: ""
+    };
+  }
+
+  const meanCodes =
+    parseMeanCodeInput(
+      meanCodeRangeInput.value
+    );
+
+  if (
+    meanCodes === null ||
+    meanCodes.length < 2
+  ) {
+    alert(
+      "Please enter a valid MEAN Code Range.\n\n" +
+      "Example: 1-10 or 1-5,7,9-10"
+    );
+
+    return null;
+  }
+
+  const availableCodes =
+    getMeanAvailableCodesFromCurrentInput();
+
+  /*
+    Chỉ đối chiếu code nếu Question Type
+    có danh sách answer code rõ ràng.
+  */
+  if (
+    Array.isArray(availableCodes) &&
+    availableCodes.length > 0
+  ) {
+    const availableCodeSet = new Set(
+      availableCodes.map(String)
+    );
+
+    const missingCodes =
+      meanCodes.filter(code => {
+        return !availableCodeSet.has(
+          String(code)
+        );
+      });
+
+    if (missingCodes.length > 0) {
+      alert(
+        "These MEAN codes were not found in the answer rows:\n\n" +
+        missingCodes.join(", ")
+      );
+
+      return null;
+    }
+  }
+
+  const meanCodeRange =
+    compressMeanCodes(meanCodes);
+
+  meanCodeRangeInput.value =
+    meanCodeRange;
+
+  return {
+    useRank,
+    useMean: true,
+    meanCodeRange
+  };
+}
+
 function collectTablesFromInput() {
   const rawQuestionCode = questionCodeInput.value.trim();
   const questionCodes = expandQuestionCodes(rawQuestionCode);
-  const questionText = questionTextInput.value.trim();
+  const questionText =
+  normalizeQuestionText(
+    questionTextInput.value
+  );
+
+questionTextInput.value = questionText;
 
   if (questionCodes.length === 0 || !rawQuestionCode) {
     alert("Please enter Question Code / Table Code.");
@@ -2322,6 +3947,19 @@ function collectTablesFromInput() {
     alert("Please enter Question Text / Summary Title.");
     return null;
   }
+
+  const sharedFeatureState =
+  collectSharedFeatureState();
+
+if (!sharedFeatureState) {
+  return null;
+}
+
+const {
+  useRank,
+  useMean,
+  meanCodeRange
+} = sharedFeatureState;
 
   const isArrayAskedBase =
   questionTypeSelect.value === "array" &&
@@ -2360,6 +3998,9 @@ if (
         questionText: buildRankingTitle(questionText, metric.label),
         useST: false,
         useDS: false,
+        useRank,
+useMean,
+meanCodeRange,
         subtitleOnly: "",
         baseType: baseTypeSelect.value,
         askedBaseText: askedBaseTextInput.value.trim(),
@@ -2403,7 +4044,12 @@ if (
       rowType: "multiple_choice",
       questionText,
       useST: false,
-      useDS: false,
+      useDS: useDSCheckbox.checked,
+      
+      useRank,
+useMean,
+meanCodeRange,
+
       subtitleOnly: "",
       baseType: baseTypeSelect.value,
       askedBaseText: askedBaseTextInput.value.trim(),
@@ -2432,35 +4078,91 @@ if (
       return null;
     }
 
-    return [{
-      projectType: projectTypeSelect.value || "N2",
-      questionCode: questionCodes[0],
-      questionType: "demographic",
-      rowType: rowTypeSelect.value,
-      questionText,
-      useST: false,
-      useDS: false,
-      subtitleOnly: "",
-      baseType: baseTypeSelect.value,
-      askedBaseText: askedBaseTextInput.value.trim(),
-      manualUseIndex: "",
-      answerOptions: answerOptionsInput.value.trim(),
+   if (
+  useDSCheckbox.checked &&
+  normalizeRowType(rowTypeSelect.value) !==
+    "custom_code"
+) {
+  if (
+    !customDSPositiveSelect.value ||
+    !customDSNegativeSelect.value
+  ) {
+    alert(
+      "Please click Build D/S Setup and select D/S rows."
+    );
 
-      customNetGroups: parseCustomNetGroups(customNetGroupsInput.value),
-      customNetGroupsRaw: customNetGroupsInput.value.trim(),
-      customDSPositive: customDSPositiveSelect.value || "",
-      customDSNegative: customDSNegativeSelect.value || "",
+    return null;
+  }
 
-      demographicAdditionalCodes: demographicAdditionalCodesInput.value.trim(),
+  const positive = parseCustomDSValue(
+    customDSPositiveSelect.value
+  );
 
-      summaryRaw: "",
-      summaryBlocks: [],
-      rankingMetricDefinitions: "",
-      rankingItemsRaw: "",
-      rankingItems: [],
-      arrayGroupId: "",
-      arrayPosition: 0
-    }];
+  const negative = parseCustomDSValue(
+    customDSNegativeSelect.value
+  );
+
+  if (
+    positive.rowNumber ===
+    negative.rowNumber
+  ) {
+    alert(
+      "D/S Positive Row and Negative Row cannot be the same."
+    );
+
+    return null;
+  }
+}
+ 
+  return [{
+  projectType:
+    projectTypeSelect.value || "N2",
+
+  questionCode: questionCodes[0],
+  questionType: "demographic",
+  rowType: rowTypeSelect.value,
+  questionText,
+
+  useST: false,
+  useDS: useDSCheckbox.checked,
+  useRank,
+useMean,
+meanCodeRange,
+
+  subtitleOnly: "",
+  baseType: baseTypeSelect.value,
+  askedBaseText:
+    askedBaseTextInput.value.trim(),
+
+  manualUseIndex: "",
+  answerOptions:
+    answerOptionsInput.value.trim(),
+
+  customNetGroups:
+    parseCustomNetGroups(
+      customNetGroupsInput.value
+    ),
+
+  customNetGroupsRaw:
+    customNetGroupsInput.value.trim(),
+
+  customDSPositive:
+    customDSPositiveSelect.value || "",
+
+  customDSNegative:
+    customDSNegativeSelect.value || "",
+
+  demographicAdditionalCodes:
+    demographicAdditionalCodesInput.value.trim(),
+
+  summaryRaw: "",
+  summaryBlocks: [],
+  rankingMetricDefinitions: "",
+  rankingItemsRaw: "",
+  rankingItems: [],
+  arrayGroupId: "",
+  arrayPosition: 0
+}];
   }
 
   if (questionTypeSelect.value === "listout_table") {
@@ -2472,6 +4174,11 @@ if (
     questionText,
     useST: false,
     useDS: false,
+
+    useRank,
+useMean,
+meanCodeRange,
+    
     subtitleOnly: "",
     baseType: "total_sample",
     askedBaseText: "",
@@ -2517,6 +4224,9 @@ if (
       questionText,
       useST: false,
       useDS: false,
+       useRank,
+useMean,
+meanCodeRange,
       subtitleOnly: "",
       baseType: baseTypeSelect.value,
       askedBaseText: askedBaseTextInput.value.trim(),
@@ -2581,6 +4291,7 @@ const arraySampleSelections =
     ? getArraySampleSelections()
     : [];
 
+
 return questionCodes.map((code, index) => {
   return {
     projectType: projectTypeSelect.value || "N2",
@@ -2590,6 +4301,11 @@ return questionCodes.map((code, index) => {
     questionText,
     useST: useSTCheckbox.checked,
     useDS: useDSCheckbox.checked,
+
+    useRank,
+useMean,
+meanCodeRange,
+
     subtitleOnly: subtitleLines[index] || subtitleLines[0] || "",
     baseType: baseTypeSelect.value,
 
@@ -2622,6 +4338,143 @@ return questionCodes.map((code, index) => {
     arrayPosition: isArrayRange ? index : 0
   };
 });
+}
+
+function buildMeanLine(table) {
+  if (!table.useMean) {
+    return "";
+  }
+
+  const range =
+    normalizeMeanCodeRange(
+      table.meanCodeRange
+    );
+
+  if (!range) {
+    return "";
+  }
+
+  return formatSyntaxRow(
+    "MEAN",
+    table.questionCode +
+      " (" +
+      range +
+      ")",
+    {
+      indent: " ",
+      logicColumn: 34,
+      suffix: "SM,SX"
+    }
+  );
+}
+
+function appendMeanLine(
+  lines,
+  table
+) {
+  const updatedLines = [
+    ...lines
+  ];
+
+  const meanLine =
+    buildMeanLine(table);
+
+  if (meanLine) {
+    updatedLines.push(
+      meanLine
+    );
+  }
+
+  return updatedLines;
+}
+
+function getExactSyntaxRowCode(line) {
+  const parts =
+    String(line || "").split("^");
+
+  if (parts.length < 2) {
+    return "";
+  }
+
+  const logic =
+    String(parts[1] || "").trim();
+
+  /*
+    Chỉ match row code đơn:
+
+    Q8 (10)
+    Q8 (1)
+
+    Không match:
+    Q8 (8-10)
+  */
+  const match = logic.match(
+    /^[A-Z0-9_]+\s*\(\s*(\d+)\s*\)$/i
+  );
+
+  return match ? match[1] : "";
+}
+
+function insertMeanLineIntoRows(
+  rowLines,
+  table
+) {
+  if (!table.useMean) {
+    return rowLines;
+  }
+
+  const meanCodes =
+    parseMeanCodeInput(
+      table.meanCodeRange
+    );
+
+  const meanLine =
+    buildMeanLine(table);
+
+  if (
+    !meanCodes ||
+    meanCodes.length === 0 ||
+    !meanLine
+  ) {
+    return rowLines;
+  }
+
+  const meanCodeSet = new Set(
+    meanCodes.map(String)
+  );
+
+  let insertIndex = -1;
+
+  rowLines.forEach((line, index) => {
+    const rowCode =
+      getExactSyntaxRowCode(line);
+
+    if (meanCodeSet.has(rowCode)) {
+      /*
+        Lưu vị trí cuối cùng thuộc range.
+
+        Với scale hiển thị:
+        10, 9, 8 ... 1, 99
+
+        vị trí cuối là row code 1.
+      */
+      insertIndex = index;
+    }
+  });
+
+  const updatedLines = [...rowLines];
+
+  if (insertIndex === -1) {
+    updatedLines.push(meanLine);
+  } else {
+    updatedLines.splice(
+      insertIndex + 1,
+      0,
+      meanLine
+    );
+  }
+
+  return updatedLines;
 }
 
 function buildRankingTitle(baseTitle, metricLabel) {
@@ -2821,6 +4674,17 @@ function editArrayGroup(index) {
   const groupTables = groupItems.map(item => item.table);
   const firstTable = groupTables[0];
 
+  useMeanCheckbox.checked =
+  firstTable.useMean === true;
+
+  useRankCheckbox.checked =
+  firstTable.useRank === true;
+
+meanCodeRangeInput.value =
+  firstTable.meanCodeRange || "";
+
+toggleMeanSetupUI();
+
   editingIndex = groupItems[0].index;
   editingArrayGroupId = clickedTable.arrayGroupId;
   editingArrayGroupStartIndex = groupItems[0].index;
@@ -2927,6 +4791,19 @@ function editTable(index) {
 
   useSTCheckbox.checked = !!table.useST;
   useDSCheckbox.checked = table.useDS !== false;
+
+  useRankCheckbox.checked =
+  table.useRank === true;
+  
+  useMeanCheckbox.checked =
+  table.useMean === true;
+
+meanCodeRangeInput.value =
+  table.meanCodeRange || "";
+
+toggleMeanSetupUI();
+toggleQuestionTypeUI();
+
   subtitleOnlyInput.value = table.subtitleOnly || "";
   manualUseIndexInput.value = table.manualUseIndex || "";
   answerOptionsInput.value = table.answerOptions || "";
@@ -3003,26 +4880,43 @@ if (table.questionType === "summary_table") {
   toggleAnswerOptionsBox();
   toggleAskedBaseBox();
 
-  } else if (table.questionType === "demographic") {
-  populateRowTypeOptions(demographicRowTypeOptions, table.rowType);
+  } else if (
+  table.questionType === "demographic"
+) {
+  populateRowTypeOptions(
+    demographicRowTypeOptions,
+    table.rowType
+  );
+
   rowTypeSelect.value = table.rowType;
 
-  demographicAdditionalCodesInput.value = table.demographicAdditionalCodes || "";
+  demographicAdditionalCodesInput.value =
+    table.demographicAdditionalCodes || "";
 
-  answerOptionsInput.value = table.answerOptions || "";
+  answerOptionsInput.value =
+    table.answerOptions || "";
 
-  customNetGroupsInput.value = table.customNetGroupsRaw || "";
-  buildCustomDSSetup();
+  customNetGroupsInput.value =
+    table.customNetGroupsRaw || "";
 
-  if (table.customDSPositive) {
-    customDSPositiveSelect.value = table.customDSPositive;
-  }
+  useDSCheckbox.checked =
+    table.useDS === true;
 
-  if (table.customDSNegative) {
-    customDSNegativeSelect.value = table.customDSNegative;
-  }
+  toggleUseDSBox();
 
-  if (!table.customNetGroupsRaw && !table.answerOptions) {
+  if (table.useDS) {
+    buildCustomDSSetup();
+
+    if (table.customDSPositive) {
+      customDSPositiveSelect.value =
+        table.customDSPositive;
+    }
+
+    if (table.customDSNegative) {
+      customDSNegativeSelect.value =
+        table.customDSNegative;
+    }
+  } else {
     customDSBox.classList.add("hidden");
   }
 
@@ -3306,7 +5200,13 @@ function renderInputList() {
     */
     const tableIndex = arrayIndex + 1;
     const questionCodeLine = buildQuestionCodeLine(table.questionCode, tableIndex);
-    const tableOptions = buildTableOptions(table.questionType, table.useST, table.projectType);
+    const tableOptions =
+  buildTableOptions(
+    table.questionType,
+    table.useST,
+    table.useRank,
+    table.projectType
+  );
     const baseLine = buildBaseLine(table);
 
     const item = document.createElement("div");
@@ -3349,7 +5249,14 @@ function generateOutput() {
   tables.forEach((table, arrayIndex) => {
     const tableIndex = arrayIndex + 1;
     const line1 = buildQuestionCodeLine(table.questionCode, tableIndex);
-    const line2 = " " + buildTableOptions(table.questionType, table.useST, table.projectType);
+    const line2 =
+  " " +
+  buildTableOptions(
+    table.questionType,
+    table.useST,
+    table.useRank,
+    table.projectType
+  );
     const line3 = buildQuestionTextLine(table);
     const line4 = buildBaseLine(table);
 
@@ -3360,57 +5267,183 @@ function generateOutput() {
     block.push(line3);
     block.push(line4);
 
-    if (table.questionType === "ranking_table") {
-    const rankingLines = buildRankingTableLines(table);
-    rankingLines.forEach(line => block.push(line));
-    blocks.push(block.join("\n"));
-    return;
-}
+    if (
+  table.questionType ===
+  "ranking_table"
+) {
+  let rankingLines =
+    buildRankingTableLines(table);
 
-    if (table.questionType === "summary_table") {
-      const summaryLines = buildSummaryTableLines(table.summaryBlocks || []);
-      summaryLines.forEach(line => block.push(line));
-      blocks.push(block.join("\n"));
-      return;
-    }
+  rankingLines =
+    appendMeanLine(
+      rankingLines,
+      table
+    );
 
-    if (table.questionType === "listout_table") {
-  const listoutLines = buildListoutTableLines(table);
-  listoutLines.forEach(line => block.push(line));
-  blocks.push(block.join("\n"));
+  rankingLines.forEach(line => {
+    block.push(line);
+  });
+
+  blocks.push(
+    block.join("\n")
+  );
+
   return;
 }
 
-    if (table.questionType === "multiple_choice") {
-  const dsLine = buildCustomDSLine(table);
+    if (
+  table.questionType ===
+  "summary_table"
+) {
+  let summaryLines =
+    buildSummaryTableLines(
+      table.summaryBlocks || []
+    );
+
+  summaryLines =
+    appendMeanLine(
+      summaryLines,
+      table
+    );
+
+  summaryLines.forEach(line => {
+    block.push(line);
+  });
+
+  blocks.push(
+    block.join("\n")
+  );
+
+  return;
+}
+
+    if (
+  table.questionType ===
+  "listout_table"
+) {
+  let listoutLines =
+    buildListoutTableLines(table);
+
+  listoutLines =
+    appendMeanLine(
+      listoutLines,
+      table
+    );
+
+  listoutLines.forEach(line => {
+    block.push(line);
+  });
+
+  blocks.push(
+    block.join("\n")
+  );
+
+  return;
+}
+
+   if (
+  table.questionType ===
+  "multiple_choice"
+) {
+  const dsLine =
+    buildCustomDSLine(table);
 
   if (dsLine) {
     block.push(dsLine);
   }
 
   if (table.useCustomNetGroups) {
-    const netGroupLines = buildMultipleChoiceNetGroupLines(table);
-    netGroupLines.forEach(line => block.push(line));
+    const netGroupLines =
+      buildMultipleChoiceNetGroupLines(
+        table
+      );
+
+    netGroupLines.forEach(line => {
+      block.push(line);
+    });
   }
 
-  const answerRows = buildMultipleChoiceAnswerRows(
-    table.answerOptions,
-    table.questionCode,
-    table.useCustomNetGroups ? table.customNetGroups || [] : []
+  const answerRows =
+    buildMultipleChoiceAnswerRows(
+      table.answerOptions,
+      table.questionCode,
+      table.useCustomNetGroups
+        ? table.customNetGroups || []
+        : []
+    );
+
+  answerRows.forEach(line => {
+    block.push(line);
+  });
+
+  /*
+    Multiple Choice hiện chèn MEAN ở cuối.
+  */
+  const meanLine =
+    buildMeanLine(table);
+
+  if (meanLine) {
+    block.push(meanLine);
+  }
+
+  blocks.push(
+    block.join("\n")
   );
 
-  answerRows.forEach(line => block.push(line));
-
-  blocks.push(block.join("\n"));
   return;
 }
 
-        if (table.questionType === "demographic") {
-    const demographicLines = buildDemographicTemplateLines(table);
-    demographicLines.forEach(line => block.push(line));
-    blocks.push(block.join("\n"));
-    return;
+       if (
+  table.questionType ===
+  "multiple_choice"
+) {
+  const dsLine =
+    buildCustomDSLine(table);
+
+  if (dsLine) {
+    block.push(dsLine);
   }
+
+  if (table.useCustomNetGroups) {
+    const netGroupLines =
+      buildMultipleChoiceNetGroupLines(
+        table
+      );
+
+    netGroupLines.forEach(line => {
+      block.push(line);
+    });
+  }
+
+  const answerRows =
+    buildMultipleChoiceAnswerRows(
+      table.answerOptions,
+      table.questionCode,
+      table.useCustomNetGroups
+        ? table.customNetGroups || []
+        : []
+    );
+
+  answerRows.forEach(line => {
+    block.push(line);
+  });
+
+  /*
+    Multiple Choice hiện chèn MEAN ở cuối.
+  */
+  const meanLine =
+    buildMeanLine(table);
+
+  if (meanLine) {
+    block.push(meanLine);
+  }
+
+  blocks.push(
+    block.join("\n")
+  );
+
+  return;
+}
 
     if (table.useST) {
       if (table.questionType === "array") {
@@ -3448,17 +5481,36 @@ function generateOutput() {
       const netGroupLines = buildCustomNetGroupLines(table);
       netGroupLines.forEach(line => block.push(line));
 
-      const answerRows = buildRowsFromAnswerOptions(
-      table.answerOptions,
-      table.questionCode,
-      table.customNetGroups || []
-    );
+    let answerRows =
+  buildRowsFromAnswerOptions(
+    table.answerOptions,
+    table.questionCode,
+    table.customNetGroups || []
+  );
 
-      answerRows.forEach(line => block.push(line));
+answerRows =
+  insertMeanLineIntoRows(
+    answerRows,
+    table
+  );
+
+answerRows.forEach(line => {
+  block.push(line);
+});
 
     } else {
-      const rowLines = buildRowTemplateLines(table);
-      rowLines.forEach(line => block.push(line));
+      let rowLines =
+  buildRowTemplateLines(table);
+
+rowLines =
+  insertMeanLineIntoRows(
+    rowLines,
+    table
+  );
+
+rowLines.forEach(line => {
+  block.push(line);
+});
     }
 
     blocks.push(block.join("\n"));
@@ -3513,6 +5565,29 @@ function clearInputFields() {
   safeSetChecked(useDSCheckbox, true);
   safeSetValue(subtitleOnlyInput, "");
   safeSetValue(manualUseIndexInput, "");
+
+  safeSetChecked(
+  useMeanCheckbox,
+  false
+);
+
+safeSetChecked(
+  useRankCheckbox,
+  false
+);
+
+toggleQuestionTypeUI();
+
+safeSetValue(
+  meanCodeRangeInput,
+  ""
+);
+
+safeAddHidden(
+  meanSetupBox
+);
+
+toggleMeanSetupUI();
 
   safeSetValue(baseTypeSelect, "total_sample");
   safeSetValue(askedBaseTextInput, "");
@@ -3750,51 +5825,151 @@ function buildMultipleChoiceVariable(baseQuestionCode, answerCode) {
   return baseQuestionCode + "_" + answerCode;
 }
 
-function buildMultipleChoiceAnswerRows(answerOptionsText, questionCode, netGroups = []) {
-  const options = parseAnswerOptions(answerOptionsText);
+function buildMultipleChoiceAnswerRows(
+  answerOptionsText,
+  questionCode,
+  netGroups = []
+) {
+  const options = parseAnswerOptions(
+    answerOptionsText
+  );
 
   return options.map(option => {
-    const variableName = buildMultipleChoiceVariable(questionCode, option.code);
+    const variableName =
+      buildMultipleChoiceVariable(
+        questionCode,
+        option.code
+      );
 
-    const shouldIndent = isAnswerCodeInsideNetGroups(option.code, netGroups);
-    const indent = shouldIndent ? "   " : " ";
+    const shouldIndent =
+      isAnswerCodeInsideNetGroups(
+        option.code,
+        netGroups
+      );
 
-    return (
-      indent +
-      option.label.padEnd(30) +
-      "^ " +
-      variableName +
-      " (1)^"
+    const indent = shouldIndent
+      ? "   "
+      : " ";
+
+    return formatSyntaxRow(
+      option.label,
+      variableName + " (1)",
+      {
+        indent,
+        logicColumn: 34
+      }
     );
   });
 }
 
-function buildMultipleChoiceNetGroupLines(table) {
-  const netGroups = table.customNetGroups || [];
+function buildMultipleChoiceNetGroupLines(
+  table
+) {
+  const netGroups =
+    table.customNetGroups || [];
 
   return netGroups.map(group => {
-    const codes = expandCodeRange(group.range);
+    /*
+      Explicit logic:
+      Q13:1-3 OR Q14:1
+    */
+    if (group.logic) {
+      const logic =
+        formatCustomNetGroupLogic(
+          group,
+          table.questionCode
+        );
 
-    const logic = codes.map(code => {
-      const variableName = buildMultipleChoiceVariable(table.questionCode, code);
-      return variableName + " (1)";
-    }).join(" or ");
+      return formatSyntaxRow(
+        group.label,
+        logic,
+        {
+          indent: " ",
+          logicColumn: 34,
+          suffix:
+            group.options || "L-,SX"
+        }
+      );
+    }
 
-    return (
-      " " +
-      group.label.padEnd(30) +
-      "^ {" +
-      logic +
-      "}^" +
-      group.options
+    /*
+      Multiple Choice range cũ.
+    */
+    const codes = expandCodeRange(
+      group.range
+    );
+
+    const netLogic = codes
+      .map(code => {
+        const variableName =
+          buildMultipleChoiceVariable(
+            table.questionCode,
+            code
+          );
+
+        return variableName + " (1)";
+      })
+      .join(" or ");
+
+    return formatSyntaxRow(
+      group.label,
+      "{" + netLogic + "}",
+      {
+        indent: " ",
+        logicColumn: 34,
+        suffix:
+          group.options || "L-,SX"
+      }
     );
   });
+}
+
+function formatSyntaxRow(
+  label,
+  logic,
+  {
+    indent = " ",
+    logicColumn = 34,
+    suffix = "",
+    addTrailingCaret = true
+  } = {}
+) {
+  const cleanLabel = String(label || "").trimEnd();
+  const cleanLogic = String(logic || "").trim();
+
+  /*
+    Dấu ^ được nối vào label trước.
+    Sau đó mới thêm khoảng trắng để căn logic.
+  */
+  const labelWithCaret =
+    indent + cleanLabel + "^";
+
+  /*
+    Nếu label ngắn, pad để logic bắt đầu cùng một cột.
+    Nếu label quá dài, vẫn để ít nhất một space sau ^.
+  */
+  const leftPart =
+    labelWithCaret.length < logicColumn
+      ? labelWithCaret.padEnd(logicColumn, " ")
+      : labelWithCaret + " ";
+
+  const trailingCaret =
+    addTrailingCaret ? "^" : "";
+
+  return (
+    leftPart +
+    cleanLogic +
+    trailingCaret +
+    suffix
+  );
 }
 
 const summarySetupPanel = document.getElementById("summarySetupPanel");
 
 function toggleQuestionTypeUI() {
   const questionType = questionTypeSelect.value;
+  toggleRankBox();
+    toggleMeanSetupUI();
 
   summarySetupPanel.classList.add("hidden");
   rankingSetupPanel.classList.add("hidden");
@@ -3855,6 +6030,8 @@ function toggleQuestionTypeUI() {
   summarySetupPanel.classList.add("hidden");
   rankingSetupPanel.classList.add("hidden");
 
+  toggleUseDSBox();
+  toggleAskedBaseBox();
   return;
 }
 
@@ -3898,38 +6075,179 @@ buildRankingSplitBtn.addEventListener("click", buildRankingSplitSetup);
 closeRankingSplitModalBtn.addEventListener("click", closeRankingSplitModal);
 saveRankingSplitModalBtn.addEventListener("click", closeRankingSplitModal);
 
+useMeanCheckbox.addEventListener(
+  "change",
+  toggleMeanSetupUI
+);
+
+useRankCheckbox.addEventListener(
+  "change",
+  function () {
+    /*
+      Không cần generate ngay vì trạng thái chỉ được
+      lưu khi Add Table hoặc Update Table.
+    */
+  }
+);
+
 rankingSplitModal.addEventListener("click", function (event) {
   if (event.target === rankingSplitModal) {
     closeRankingSplitModal();
   }
 });
 
-questionTypeSelect.addEventListener("change", function () {
-  if (questionTypeSelect.value === "demographic") {
-    populateRowTypeOptions(demographicRowTypeOptions, "");
+useDSCheckbox.addEventListener(
+  "change",
+  function () {
+    toggleUseDSBox();
+
+    if (!useDSCheckbox.checked) {
+      customDSBox.classList.add("hidden");
+    }
   }
+);
 
-  if (
-    questionTypeSelect.value === "single_choice" ||
-    questionTypeSelect.value === "array" ||
-    questionTypeSelect.value === ""
-  ) {
-    populateRowTypeOptions(normalRowTypeOptions, "");
+demographicAdditionalCodesInput.addEventListener(
+  "input",
+  function () {
+    if (questionTypeSelect.value !== "demographic") {
+      return;
+    }
+
+    customDSPositiveSelect.innerHTML = "";
+    customDSNegativeSelect.innerHTML = "";
+    customDSBox.classList.add("hidden");
   }
+);
 
-  toggleQuestionTypeUI();
-  toggleAskedBaseBox();
-});
+rowTypeSelect.addEventListener(
+  "change",
+  function () {
+    toggleAnswerOptionsBox();
 
-rowTypeSelect.addEventListener("change", function () {
-  toggleAnswerOptionsBox();
-  toggleUseDSBox();
-});
+    customDSPositiveSelect.innerHTML = "";
+    customDSNegativeSelect.innerHTML = "";
+    customDSBox.classList.add("hidden");
+
+    toggleUseDSBox();
+  }
+);
+
+
+
+questionTypeSelect.addEventListener(
+  "change",
+  function () {
+    /*
+      Ranking Table mặc định bật Rank.
+      User vẫn có thể bỏ tick sau đó.
+    */
+    if (
+      questionTypeSelect.value ===
+      "ranking_table"
+    ) {
+      useRankCheckbox.checked = true;
+    }
+
+    if (
+      questionTypeSelect.value ===
+      "demographic"
+    ) {
+      populateRowTypeOptions(
+        demographicRowTypeOptions,
+        ""
+      );
+    }
+
+    if (
+      questionTypeSelect.value ===
+        "single_choice" ||
+      questionTypeSelect.value ===
+        "array" ||
+      questionTypeSelect.value === ""
+    ) {
+      populateRowTypeOptions(
+        normalRowTypeOptions,
+        ""
+      );
+    }
+
+    toggleQuestionTypeUI();
+    toggleAskedBaseBox();
+  }
+);
+
 useSTCheckbox.addEventListener("change", toggleSubtitleBox);
 
 baseTypeSelect.addEventListener("change", function () {
   toggleAskedBaseBox();
 });
+
+questionTextInput.addEventListener(
+  "paste",
+  function (event) {
+    const clipboardText =
+      event.clipboardData?.getData("text/plain");
+
+    if (clipboardText === undefined) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const start =
+      this.selectionStart ?? this.value.length;
+
+    const end =
+      this.selectionEnd ?? start;
+
+    const before = this.value.slice(0, start);
+    const after = this.value.slice(end);
+
+    /*
+      Chỉ xóa question number khi user đang paste
+      vào một ô trống hoặc thay toàn bộ nội dung.
+
+      Điều này tránh trường hợp paste "6. Something"
+      vào giữa một đoạn văn mà app tự xóa số 6.
+    */
+    const isReplacingWholeText =
+      before.trim() === "" &&
+      after.trim() === "";
+
+    let cleanedPaste =
+      normalizeQuestionSpacing(clipboardText);
+
+    if (isReplacingWholeText) {
+      cleanedPaste =
+        removeLeadingQuestionNumber(
+          cleanedPaste
+        );
+    }
+
+    this.value =
+      before +
+      cleanedPaste +
+      after;
+
+    const newCursorPosition =
+      before.length + cleanedPaste.length;
+
+    this.setSelectionRange(
+      newCursorPosition,
+      newCursorPosition
+    );
+  }
+);
+
+questionTextInput.addEventListener(
+  "blur",
+  function () {
+    this.value = normalizeQuestionText(
+      this.value
+    );
+  }
+);
 
 useCustomNetGroupsCheckbox.addEventListener("change", toggleCustomNetGroupBox);
 buildSummarySetupBtn.addEventListener("click", buildSummarySetup);
@@ -3953,6 +6271,8 @@ toggleSubtitleBox();
 toggleAskedBaseBox();
 toggleAnswerOptionsBox();
 toggleCustomNetGroupBox();
+toggleUseDSBox();
+toggleQuestionTypeUI();
 
 if (splitRowsContainer && splitRowsContainer.children.length === 0) {
   resetSplitRows();
@@ -4001,9 +6321,14 @@ arraySampleModal.addEventListener("click", function (event) {
   }
 });
 
-answerOptionsInput.addEventListener("blur", function () {
-  answerOptionsInput.value = answerOptionsInput.value.toUpperCase();
-});
+answerOptionsInput.addEventListener(
+  "blur",
+  function () {
+    this.value = cleanAnswerOptionsText(
+      this.value
+    );
+  }
+);
 
 customNetGroupsInput.addEventListener("blur", function () {
   customNetGroupsInput.value = customNetGroupsInput.value.toUpperCase();
@@ -4094,3 +6419,203 @@ applyRegionMappingBtn.addEventListener("click", () => {
 
   alert("Region mapping applied successfully!");
 });
+
+
+/* ========================================
+   HELP TOOLTIP
+======================================== */
+
+function closeAllHelpTooltips(exceptButton = null) {
+  document
+    .querySelectorAll(".help-tooltip.is-open")
+    .forEach(button => {
+      if (button !== exceptButton) {
+        button.classList.remove("is-open");
+      }
+    });
+}
+
+function positionHelpTooltip(button) {
+  const tooltipBox =
+    button.querySelector(".help-tooltip-box");
+
+  if (!tooltipBox) return;
+
+  /*
+    Trên mobile, để CSS media query
+    tự đưa tooltip vào giữa màn hình.
+  */
+  if (window.innerWidth <= 600) {
+    tooltipBox.style.removeProperty("top");
+    tooltipBox.style.removeProperty("left");
+    return;
+  }
+
+  const buttonRect =
+    button.getBoundingClientRect();
+
+  const gap = 26;
+  const screenPadding = 12;
+
+  const tooltipWidth =
+    tooltipBox.offsetWidth || 350;
+
+    
+  const tooltipHeight =
+    tooltipBox.offsetHeight || 200;
+
+  /*
+    Đặt tooltip bên phải nút dấu hỏi.
+  */
+  let left =
+    buttonRect.right + gap;
+
+  let top =
+    buttonRect.top - 10;
+
+  /*
+    Không để tooltip tràn khỏi cạnh phải
+    hoặc cạnh dưới màn hình.
+  */
+  left = Math.min(
+    left,
+    window.innerWidth -
+      tooltipWidth -
+      screenPadding
+  );
+
+  top = Math.max(
+    screenPadding,
+    Math.min(
+      top,
+      window.innerHeight -
+        tooltipHeight -
+        screenPadding
+    )
+  );
+
+  tooltipBox.style.left =
+    `${left}px`;
+
+  tooltipBox.style.top =
+    `${top}px`;
+}
+
+/*
+  Đặt vị trí trước khi tooltip hiện khi hover.
+*/
+document.addEventListener(
+  "pointerover",
+  function (event) {
+    const helpButton =
+      event.target.closest(".help-tooltip");
+
+    if (helpButton) {
+      positionHelpTooltip(helpButton);
+    }
+  }
+);
+
+/*
+  Hỗ trợ điều hướng bằng bàn phím.
+*/
+document.addEventListener(
+  "focusin",
+  function (event) {
+    const helpButton =
+      event.target.closest(".help-tooltip");
+
+    if (helpButton) {
+      positionHelpTooltip(helpButton);
+    }
+  }
+);
+
+/*
+  Click dấu hỏi để mở hoặc đóng.
+*/
+document.addEventListener(
+  "click",
+  function (event) {
+    if (
+      event.target.closest(
+        ".help-tooltip-box"
+      )
+    ) {
+      event.stopPropagation();
+      return;
+    }
+
+    const helpButton =
+      event.target.closest(".help-tooltip");
+
+    if (!helpButton) {
+      closeAllHelpTooltips();
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const shouldOpen =
+      !helpButton.classList.contains(
+        "is-open"
+      );
+
+    closeAllHelpTooltips(helpButton);
+
+    helpButton.classList.toggle(
+      "is-open",
+      shouldOpen
+    );
+
+    if (shouldOpen) {
+      requestAnimationFrame(() => {
+        positionHelpTooltip(helpButton);
+      });
+    }
+  }
+);
+
+/*
+  Cập nhật vị trí khi cuộn Input.
+*/
+const inputCard =
+  document.querySelector(".input-card");
+
+if (inputCard) {
+  inputCard.addEventListener(
+    "scroll",
+    function () {
+      document
+        .querySelectorAll(
+          ".help-tooltip.is-open"
+        )
+        .forEach(positionHelpTooltip);
+    },
+    { passive: true }
+  );
+}
+
+/*
+  Cập nhật vị trí khi thay đổi kích thước cửa sổ.
+*/
+window.addEventListener(
+  "resize",
+  function () {
+    document
+      .querySelectorAll(
+        ".help-tooltip.is-open"
+      )
+      .forEach(positionHelpTooltip);
+  }
+);
+
+document.addEventListener(
+  "keydown",
+  function (event) {
+    if (event.key === "Escape") {
+      closeAllHelpTooltips();
+    }
+  }
+);
