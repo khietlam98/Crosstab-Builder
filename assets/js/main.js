@@ -508,6 +508,20 @@ function normalizeQuestionText(value) {
   );
 }
 
+function cleanSubtitleLine(value) {
+  return normalizeQuestionSpacing(
+    removeLeadingQuestionNumber(value)
+  );
+}
+
+function getSubtitleLines() {
+  return String(subtitleOnlyInput.value || "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map(line => cleanSubtitleLine(line))
+    .filter(line => line !== "");
+}
+
 function getDemographicBodyLines(
   rowType,
   questionCode,
@@ -586,10 +600,7 @@ function getDemographicDSChoices() {
 }
 
 function getArrayItemLabels(questionCodes) {
-  const subtitleLines = subtitleOnlyInput.value
-    .split("\n")
-    .map(line => line.trim())
-    .filter(line => line !== "");
+  const subtitleLines = getSubtitleLines();
 
   return questionCodes.map((code, index) => {
     return subtitleLines[index] || code;
@@ -940,19 +951,39 @@ function toggleCustomNetGroupBox() {
 }
 
 function toggleAnswerOptionsBox() {
-  const isCustomCode = normalizeRowType(rowTypeSelect.value) === "custom_code";
-  const isMultipleChoice = questionTypeSelect.value === "multiple_choice";
-  const isArray = questionTypeSelect.value === "array";
+  const questionType =
+    questionTypeSelect.value;
 
-  const isSummaryOrRanking =
-    questionTypeSelect.value === "summary_table" ||
-    questionTypeSelect.value === "ranking_table" ||
-    questionTypeSelect.value === "listout_table";
+  const rowType =
+    normalizeRowType(
+      rowTypeSelect.value
+    );
 
-  if ((isCustomCode || isMultipleChoice || isArray) && !isSummaryOrRanking) {
-    answerOptionsBox.classList.remove("hidden");
+  const isCustomCode =
+    rowType === "custom_code";
+
+  const isMultipleChoice =
+    questionType === "multiple_choice";
+
+  const shouldShowAnswerOptions =
+    isMultipleChoice || isCustomCode;
+
+  if (shouldShowAnswerOptions) {
+    answerOptionsBox.classList.remove(
+      "hidden"
+    );
   } else {
-    answerOptionsBox.classList.add("hidden");
+    answerOptionsBox.classList.add(
+      "hidden"
+    );
+
+    useCustomNetGroupsCheckbox.checked = false;
+    customNetGroupBox.classList.add(
+      "hidden"
+    );
+    customDSBox.classList.add(
+      "hidden"
+    );
   }
 }
 
@@ -1401,104 +1432,130 @@ function expandQuestionCodes(input) {
   }
 
   /*
+    Range được hỗ trợ:
+
+    Q1:5       => Q1, Q2, Q3, Q4, Q5
+    Q1-Q5      => Q1, Q2, Q3, Q4, Q5
+    M1:M7      => M1 ... M7
+    Q8_1:5     => Q8_1, Q8_2, Q8_3, Q8_4, Q8_5
+    Q8_1-Q8_5  => Q8_1 ... Q8_5
+    1-5        => 1, 2, 3, 4, 5
+  */
+  const rangeMatch = raw.match(
+    /^([A-Z0-9_]*?)(\d+)(?::|-)([A-Z0-9_]*?)(\d+)$/
+  );
+
+  if (rangeMatch) {
+    const startPrefix =
+      rangeMatch[1] || "";
+
+    const startNumberText =
+      rangeMatch[2];
+
+    const typedEndPrefix =
+      rangeMatch[3] || "";
+
+    const endNumberText =
+      rangeMatch[4];
+
+    const startNumber =
+      Number(startNumberText);
+
+    const endNumber =
+      Number(endNumberText);
+
+    const endPrefix =
+      typedEndPrefix || startPrefix;
+
+    if (
+      startPrefix &&
+      endPrefix &&
+      startPrefix !== endPrefix
+    ) {
+      alert(
+        "Start code and end code must use the same prefix.\n\n" +
+        "Examples:\n" +
+        "Q1:5\n" +
+        "Q8_1:5\n" +
+        "Q8_1-Q8_5"
+      );
+
+      return [];
+    }
+
+    if (endNumber < startNumber) {
+      alert(
+        "Invalid question range. End number must be greater than or equal to start number."
+      );
+
+      return [];
+    }
+
+    const prefix =
+      startPrefix || endPrefix;
+
+    const shouldKeepLeadingZero =
+      startNumberText.length > 1 &&
+      startNumberText.startsWith("0");
+
+    const numberWidth =
+      shouldKeepLeadingZero
+        ? startNumberText.length
+        : 0;
+
+    const codes = [];
+
+    for (
+      let number = startNumber;
+      number <= endNumber;
+      number++
+    ) {
+      const numberText =
+        numberWidth > 0
+          ? String(number).padStart(
+              numberWidth,
+              "0"
+            )
+          : String(number);
+
+      codes.push(
+        prefix + numberText
+      );
+    }
+
+    return codes;
+  }
+
+  /*
     Single code được hỗ trợ:
 
     Q1
-    M1
-    D1
+    Q8_1
+    D1B
+    BALLOT_A
+    REGION_CODED
+    SAMPLE_A
     1
+
+    Không cho khoảng trắng.
+    Không dùng dấu - hoặc : trừ khi là range.
   */
-  if (/^(?:[A-Z]+)?\d+$/.test(raw)) {
+  if (/^[A-Z0-9_]+$/.test(raw)) {
     return [raw];
   }
 
-  /*
-    Range được hỗ trợ:
-
-    Q1:5
-    Q1:Q5
-    Q1-5
-    Q1-Q5
-
-    M1:7
-    M1:M7
-    M1-7
-    M1-M7
-
-    1:5
-    1-5
-  */
-  const rangeMatch = raw.match(
-    /^([A-Z]*)(\d+)(?::|-)([A-Z]*)(\d+)$/
+  alert(
+    "Invalid question code.\n\n" +
+    "Supported examples:\n" +
+    "Q1\n" +
+    "Q8_1\n" +
+    "BALLOT_A\n" +
+    "Q1:5\n" +
+    "Q8_1:5\n" +
+    "Q8_1-Q8_5"
   );
 
-  if (!rangeMatch) {
-    alert(
-      "Invalid question range.\n\n" +
-      "Supported formats:\n" +
-      "Q1:5\n" +
-      "Q1-Q5\n" +
-      "M1:M7\n" +
-      "M1-M7"
-    );
-
-    return [];
-  }
-
-  const startPrefix = rangeMatch[1] || "";
-  const startNumber = Number(rangeMatch[2]);
-
-  const typedEndPrefix = rangeMatch[3] || "";
-  const endNumber = Number(rangeMatch[4]);
-
-  /*
-    Nếu phía sau không nhập prefix:
-
-    M1-7
-
-    thì kế thừa prefix M.
-  */
-  const endPrefix =
-    typedEndPrefix || startPrefix;
-
-  /*
-    Không cho range khác prefix:
-
-    M1-Q7
-  */
-  if (
-    startPrefix &&
-    endPrefix &&
-    startPrefix !== endPrefix
-  ) {
-    alert(
-      "Start code and end code must use the same prefix.\n\n" +
-      "Example: M1-M7"
-    );
-
-    return [];
-  }
-
-  if (endNumber < startNumber) {
-    alert(
-      "Invalid question range. End number must be greater than or equal to start number."
-    );
-
-    return [];
-  }
-
-  const prefix = startPrefix || endPrefix;
-  const codes = [];
-
-  for (
-    let number = startNumber;
-    number <= endNumber;
-    number++
-  ) {
-    codes.push(prefix + number);
-  }
-
-  return codes;
+  return [];
 }
 
 function buildQuestionCodeLine(questionCode, index) {
@@ -2073,6 +2130,316 @@ function cleanAnswerLabel(label) {
     .toUpperCase();
 }
 
+function cleanNetGroupLabel(label) {
+  return String(label || "")
+    .replace(/[\t\u00A0 ]+/g, " ")
+    .trim()
+    .toUpperCase();
+}
+
+function parseAnswerOptionLine(rawLine) {
+  const line = String(rawLine || "")
+    .replace(/\r/g, "")
+    .trim();
+
+  if (!line) {
+    return null;
+  }
+
+  /*
+    FORMAT:
+    1 | DEFINITELY YES
+    DEFINITELY YES | 1
+  */
+  if (line.includes("|")) {
+    const parts = line
+      .split("|")
+      .map(part => part.trim());
+
+    if (parts.length === 2) {
+      const left = parts[0];
+      const right = parts[1].replace(/^:/, "");
+
+      if (/^\d+$/.test(left)) {
+        return {
+          code: left,
+          label: cleanAnswerLabel(parts[1])
+        };
+      }
+
+      if (/^\d+$/.test(right)) {
+        return {
+          code: right,
+          label: cleanAnswerLabel(parts[0])
+        };
+      }
+    }
+  }
+
+  /*
+    FORMAT:
+    1 DEFINITELY YES
+    1. DEFINITELY YES
+    1) DEFINITELY YES
+    1 - DEFINITELY YES
+  */
+  let match = line.match(
+    /^(\d+)\s*[\.\)\-:]?\s+(.+)$/
+  );
+
+  if (match) {
+    return {
+      code: match[1],
+      label: cleanAnswerLabel(match[2])
+    };
+  }
+
+  /*
+    FORMAT:
+    DEFINITELY YES (:1)
+    DEFINITELY YES (1)
+    DEFINITELY YES [1]
+  */
+  match = line.match(
+    /^(.+?)\s*[\(\[]\s*:?\s*(\d+)\s*[\)\]]\s*$/
+  );
+
+  if (match) {
+    return {
+      code: match[2],
+      label: cleanAnswerLabel(match[1])
+    };
+  }
+
+  /*
+    FORMAT:
+    DEFINITELY YES - 1
+    DEFINITELY YES – 1
+    DEFINITELY YES — 1
+  */
+  match = line.match(
+    /^(.+?)\s*[-–—]\s*:?\s*(\d+)\s*$/
+  );
+
+  if (match) {
+    return {
+      code: match[2],
+      label: cleanAnswerLabel(match[1])
+    };
+  }
+
+  /*
+    FORMAT:
+    DEFINITELY YES 1
+    PROBABLY YES 2
+  */
+  match = line.match(
+    /^(.+?)\s+(\d+)\s*$/
+  );
+
+  if (match) {
+    return {
+      code: match[2],
+      label: cleanAnswerLabel(match[1])
+    };
+  }
+
+  return null;
+}
+
+function parseNetGroupLine(rawLine) {
+  const line = String(rawLine || "")
+    .replace(/\r/g, "")
+    .trim();
+
+  if (!line) {
+    return null;
+  }
+
+  const rangePattern =
+    "[0-9]+(?:[-:,][0-9]+)*";
+
+  /*
+    FORMAT:
+    TOTAL YES | 1-3
+    1-3 | TOTAL YES
+  */
+  if (line.includes("|")) {
+    const parts = line
+      .split("|")
+      .map(part => part.trim());
+
+    if (parts.length >= 2) {
+      const left = parts[0];
+      const right = parts
+        .slice(1)
+        .join(" | ")
+        .trim();
+
+      const cleanRight =
+        right.replace(/^:/, "");
+
+      if (
+        new RegExp("^" + rangePattern + "$")
+          .test(left)
+      ) {
+        return {
+          type: "range",
+          range: normalizeCustomCodeRange(left),
+          label: cleanNetGroupLabel(right),
+          logic: "",
+          options: "L-,SX"
+        };
+      }
+
+      if (
+        new RegExp("^" + rangePattern + "$")
+          .test(cleanRight)
+      ) {
+        return {
+          type: "range",
+          range: normalizeCustomCodeRange(cleanRight),
+          label: cleanNetGroupLabel(left),
+          logic: "",
+          options: "L-,SX"
+        };
+      }
+
+      /*
+        FORMAT:
+        TOTAL KIGGANS | Q13:1-3 OR Q14:1
+      */
+      if (
+        /\b[A-Z][A-Z0-9_]*\s*:\s*[0-9]/i
+          .test(right)
+      ) {
+        return {
+          type: "logic",
+          label: cleanNetGroupLabel(left),
+          logic: normalizeCustomNetLogic(right),
+          range: "",
+          options: "L-,SX"
+        };
+      }
+    }
+  }
+
+  /*
+    FORMAT:
+    TOTAL KIGGANS/LEAN KIGGANS    Q13:1-3 OR Q14:1
+  */
+  const explicitLogicIndex = line.search(
+    /\b[A-Z][A-Z0-9_]*\s*:\s*[0-9]/i
+  );
+
+  if (explicitLogicIndex > 0) {
+    const label = line
+      .slice(0, explicitLogicIndex)
+      .trim();
+
+    const rawLogic = line
+      .slice(explicitLogicIndex)
+      .trim();
+
+    return {
+      type: "logic",
+      label: cleanNetGroupLabel(label),
+      logic: normalizeCustomNetLogic(rawLogic),
+      range: "",
+      options: "L-,SX"
+    };
+  }
+
+  /*
+    FORMAT:
+    1-3 TOTAL YES
+    1:3 TOTAL YES
+    1,2,3 TOTAL YES
+  */
+  let match = line.match(
+    new RegExp(
+      "^(" + rangePattern + ")\\s+(.+)$"
+    )
+  );
+
+  if (match) {
+    return {
+      type: "range",
+      range: normalizeCustomCodeRange(match[1]),
+      label: cleanNetGroupLabel(match[2]),
+      logic: "",
+      options: "L-,SX"
+    };
+  }
+
+  /*
+    FORMAT:
+    TOTAL YES (:1-3)
+    TOTAL YES (1-3)
+  */
+  match = line.match(
+    new RegExp(
+      "^(.+?)\\s*[\\(\\[]\\s*:?\\s*(" +
+        rangePattern +
+        ")\\s*[\\)\\]]\\s*$"
+    )
+  );
+
+  if (match) {
+    return {
+      type: "range",
+      range: normalizeCustomCodeRange(match[2]),
+      label: cleanNetGroupLabel(match[1]),
+      logic: "",
+      options: "L-,SX"
+    };
+  }
+
+  /*
+    FORMAT:
+    TOTAL YES - 1-3
+  */
+  match = line.match(
+    new RegExp(
+      "^(.+?)\\s*[-–—]\\s*:?\\s*(" +
+        rangePattern +
+        ")\\s*$"
+    )
+  );
+
+  if (match) {
+    return {
+      type: "range",
+      range: normalizeCustomCodeRange(match[2]),
+      label: cleanNetGroupLabel(match[1]),
+      logic: "",
+      options: "L-,SX"
+    };
+  }
+
+  /*
+    FORMAT:
+    TOTAL YES 1-3
+  */
+  match = line.match(
+    new RegExp(
+      "^(.+?)\\s+(" + rangePattern + ")\\s*$"
+    )
+  );
+
+  if (match) {
+    return {
+      type: "range",
+      range: normalizeCustomCodeRange(match[2]),
+      label: cleanNetGroupLabel(match[1]),
+      logic: "",
+      options: "L-,SX"
+    };
+  }
+
+  return null;
+}
+
 function cleanAnswerOptionsText(value) {
   return String(value || "")
     .replace(/\r\n?/g, "\n")
@@ -2084,18 +2451,18 @@ function cleanAnswerOptionsText(value) {
         return "";
       }
 
-      const match = trimmedLine.match(
-        /^(\d+)\s+(.+)$/
-      );
+      const parsed =
+        parseAnswerOptionLine(trimmedLine);
 
-      if (!match) {
+      if (!parsed) {
         return cleanAnswerLabel(trimmedLine);
       }
 
-      const code = match[1];
-      const label = cleanAnswerLabel(match[2]);
-
-      return code + "\t" + label;
+      return (
+        parsed.code +
+        "\t" +
+        parsed.label
+      );
     })
     .join("\n")
     .trim();
@@ -2110,17 +2477,16 @@ function buildRowsFromAnswerOptions(
     return [];
   }
 
-  const lines = answerOptionsText
+  const lines = String(answerOptionsText || "")
     .split("\n")
     .map(line => line.trim())
     .filter(line => line !== "");
 
   return lines.map(line => {
-    const match = line.match(
-      /^(\d+)\s+(.+)$/
-    );
+    const parsed =
+      parseAnswerOptionLine(line);
 
-    if (!match) {
+    if (!parsed) {
       return (
         " *** ERROR: INVALID ANSWER OPTION - " +
         line +
@@ -2128,10 +2494,8 @@ function buildRowsFromAnswerOptions(
       );
     }
 
-    const code = match[1];
-    const label = cleanAnswerLabel(
-      match[2]
-    );
+    const code = parsed.code;
+    const label = parsed.label;
 
     const shouldIndent =
       isAnswerCodeInsideNetGroups(
@@ -2139,6 +2503,11 @@ function buildRowsFromAnswerOptions(
         netGroups
       );
 
+    /*
+      Rule đúng:
+      Chỉ indent answer rows nếu code của nó
+      nằm trong Total / Net Group.
+    */
     const indent = shouldIndent
       ? "   "
       : " ";
@@ -2159,21 +2528,12 @@ function parseAnswerOptions(answerOptionsText) {
     return [];
   }
 
-  return answerOptionsText
+  return String(answerOptionsText || "")
     .split("\n")
     .map(line => line.trim())
     .filter(line => line !== "")
     .map(line => {
-      const match = line.match(/^(\d+)\s+(.+)$/);
-
-      if (!match) {
-        return null;
-      }
-
-      return {
-        code: match[1],
-        label: cleanAnswerLabel(match[2])
-      };
+      return parseAnswerOptionLine(line);
     })
     .filter(item => item !== null);
 }
@@ -2552,151 +2912,12 @@ function parseCustomNetGroups(text) {
     return [];
   }
 
-  return String(text)
+  return String(text || "")
     .split("\n")
     .map(line => line.trim())
     .filter(line => line !== "")
     .map(line => {
-      /*
-        ========================================
-        FORMAT 1 — Dùng dấu |
-        ========================================
-
-        Format cũ:
-        TOTAL YES | 1-2
-
-        Format mới:
-        TOTAL KIGGANS | Q13:1-3 OR Q14:1
-      */
-      if (line.includes("|")) {
-        const parts = line
-          .split("|")
-          .map(part => part.trim());
-
-        if (parts.length < 2) {
-          return null;
-        }
-
-        const label = String(parts[0] || "")
-          .trim()
-          .toUpperCase();
-
-        const rawDefinition = parts
-          .slice(1)
-          .join(" | ")
-          .trim();
-
-        if (!label || !rawDefinition) {
-          return null;
-        }
-
-        /*
-          Nếu phần sau chứa variable logic như:
-          Q13:1-3
-          M1:1
-          D1B:1-4
-        */
-        const containsExplicitLogic =
-          /\b[A-Z][A-Z0-9_]*\s*:\s*[0-9]/i
-            .test(rawDefinition);
-
-        if (containsExplicitLogic) {
-          return {
-            type: "logic",
-            label,
-            logic: normalizeCustomNetLogic(
-              rawDefinition
-            ),
-            range: "",
-            options: "L-,SX"
-          };
-        }
-
-        /*
-          Nếu không có variable logic thì xem là
-          format range cũ.
-        */
-        return {
-          type: "range",
-          label,
-          range: normalizeCustomCodeRange(
-            rawDefinition
-          ),
-          logic: "",
-          options: "L-,SX"
-        };
-      }
-
-      /*
-        ========================================
-        FORMAT 2 — Label + explicit logic
-        ========================================
-
-        TOTAL KIGGANS/LEAN KIGGANS
-        Q13:1-3 OR Q14:1
-
-        Có thể phân cách bằng:
-        - Tab
-        - Nhiều dấu cách
-      */
-      const explicitLogicIndex = line.search(
-        /\b[A-Z][A-Z0-9_]*\s*:\s*[0-9]/i
-      );
-
-      if (explicitLogicIndex > 0) {
-        const label = line
-          .slice(0, explicitLogicIndex)
-          .trim()
-          .toUpperCase();
-
-        const rawLogic = line
-          .slice(explicitLogicIndex)
-          .trim();
-
-        if (!label || !rawLogic) {
-          return null;
-        }
-
-        return {
-          type: "logic",
-          label,
-          logic: normalizeCustomNetLogic(
-            rawLogic
-          ),
-          range: "",
-          options: "L-,SX"
-        };
-      }
-
-      /*
-        ========================================
-        FORMAT 3 — Range + Label cũ
-        ========================================
-
-        1-2 TOTAL YES
-        3-4 TOTAL NO
-        1:2 TOTAL YES
-        1,3-5 TOTAL GROUP
-      */
-      const rangeMatch = line.match(
-        /^([0-9]+(?:[-:,][0-9]+)*)\s+(.+)$/
-      );
-
-      if (!rangeMatch) {
-        return null;
-      }
-
-      return {
-        type: "range",
-        range: normalizeCustomCodeRange(
-          rangeMatch[1]
-        ),
-        label: rangeMatch[2]
-          .trim()
-          .toUpperCase(),
-        logic: "",
-        options: "L-,SX"
-      };
+      return parseNetGroupLine(line);
     })
     .filter(item => {
       if (!item || !item.label) {
@@ -4265,10 +4486,7 @@ if (
   }
 }
 
-  const subtitleLines = subtitleOnlyInput.value
-    .split("\n")
-    .map(line => line.trim())
-    .filter(line => line !== "");
+  const subtitleLines = getSubtitleLines();
 
   if (useSTCheckbox.checked && questionCodes.length > 1 && subtitleLines.length > 0) {
     if (subtitleLines.length !== questionCodes.length) {
@@ -5747,10 +5965,7 @@ function buildArraySampleSetup() {
 
   const sampleDefs = getArraySampleDefinitions();
 
-  const subtitleLines = subtitleOnlyInput.value
-    .split("\n")
-    .map(line => line.trim())
-    .filter(line => line !== "");
+  const subtitleLines = getSubtitleLines();
 
   const rows = questionCodes.map((code, index) => {
     const options = sampleDefs.map(sample => {
@@ -6075,6 +6290,13 @@ buildRankingSplitBtn.addEventListener("click", buildRankingSplitSetup);
 closeRankingSplitModalBtn.addEventListener("click", closeRankingSplitModal);
 saveRankingSplitModalBtn.addEventListener("click", closeRankingSplitModal);
 
+subtitleOnlyInput.addEventListener(
+  "blur",
+  function () {
+    this.value = getSubtitleLines().join("\n");
+  }
+);
+
 useMeanCheckbox.addEventListener(
   "change",
   toggleMeanSetupUI
@@ -6133,7 +6355,35 @@ rowTypeSelect.addEventListener(
   }
 );
 
+function setDefaultRowTypeByQuestionType() {
+  const questionType =
+    questionTypeSelect.value;
 
+  /*
+    Single Choice và Array mặc định dùng CUSTOM CODE.
+  */
+  if (
+    questionType === "single_choice" ||
+    questionType === "array"
+  ) {
+    populateRowTypeOptions(
+      normalRowTypeOptions,
+      "custom_code"
+    );
+
+    rowTypeSelect.value =
+      "custom_code";
+
+    return;
+  }
+
+  if (questionType === "") {
+    populateRowTypeOptions(
+      normalRowTypeOptions,
+      ""
+    );
+  }
+}
 
 questionTypeSelect.addEventListener(
   "change",
@@ -6159,21 +6409,39 @@ questionTypeSelect.addEventListener(
       );
     }
 
+ if (
+  questionTypeSelect.value ===
+    "single_choice" ||
+  questionTypeSelect.value ===
+    "array" ||
+  questionTypeSelect.value === ""
+) {
+  setDefaultRowTypeByQuestionType();
+}
+
     if (
-      questionTypeSelect.value ===
-        "single_choice" ||
-      questionTypeSelect.value ===
-        "array" ||
-      questionTypeSelect.value === ""
-    ) {
-      populateRowTypeOptions(
-        normalRowTypeOptions,
-        ""
-      );
-    }
+  questionTypeSelect.value !==
+  "multiple_choice"
+) {
+  answerOptionsInput.value = "";
+  useCustomNetGroupsCheckbox.checked = false;
+  customNetGroupsInput.value = "";
+  customNetGroupBox.classList.add("hidden");
+  customDSBox.classList.add("hidden");
+}
 
     toggleQuestionTypeUI();
-    toggleAskedBaseBox();
+
+if (
+  questionTypeSelect.value === "single_choice" ||
+  questionTypeSelect.value === "array"
+) {
+  rowTypeSelect.value = "custom_code";
+}
+
+toggleAnswerOptionsBox();
+toggleUseDSBox();
+toggleAskedBaseBox();
   }
 );
 
