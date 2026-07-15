@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -811,84 +810,22 @@
 <div id="useRankBox" class="form-group hidden">
   <div class="checkbox-row">
     <input id="useRank" type="checkbox" />
-
-    <label for="useRank">
-      Active Rank
-    </label>
+    <label for="useRank">Active Rank</label>
   </div>
 
-  <small>
-    Add OD to the end of Table Options.
-  </small>
-</div>
+  <div id="rankRLBox" class="form-group hidden">
+    <label for="rankRLCodes">RL Codes</label>
 
-<div
-  id="rankRLBox"
-  class="form-group hidden"
->
-  <div class="field-label-row">
-    <label for="rankRLCodes">
-      Rank RL Codes
-    </label>
+    <input
+      id="rankRLCodes"
+      type="text"
+      placeholder="Optional. Example: 9-12 or 9,10,11,12"
+    />
 
-    <button
-      type="button"
-      class="help-tooltip"
-      aria-label="Help for Rank RL Codes"
-      aria-haspopup="true"
-    >
-      ?
-
-      <span
-        class="help-tooltip-box"
-        role="tooltip"
-      >
-        <strong>RANK RL CODES</strong>
-
-        <span>
-          Enter the answer codes that should receive the <code>RL</code> setting.
-        </span>
-
-        <span class="help-section-title">
-          FORMAT
-        </span>
-
-        <span>
-          Use a range or comma-separated codes.
-        </span>
-
-        <span class="help-section-title">
-          EXAMPLES
-        </span>
-
-        <span>
-          <code>9-12</code>
-        </span>
-
-        <span>
-          <code>9,10,11,12</code>
-        </span>
-
-        <span class="help-section-title">
-          NOTE
-        </span>
-
-        <span>
-          Only fill this in when specific answer rows need <code>RL</code>.
-        </span>
-      </span>
-    </button>
+    <small>
+      Only the selected answer codes will receive the <b>RL</b> suffix.
+    </small>
   </div>
-
-  <input
-    id="rankRLCodes"
-    type="text"
-    placeholder="Optional. Example: 9-12 or 9,10,11,12"
-  />
-
-  <small>
-    Add RL to selected answer codes when Active Rank is on.
-  </small>
 </div>
 
         <div class="form-group">
@@ -1296,6 +1233,7 @@ APP | modetype | 6"></textarea>
 
 <!-- Script SheetJS phải load **trước** main.js -->
 <script src="https://cdn.sheetjs.com/xlsx-0.19.1/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
   <script src="assets/js/main.js"></script>
  
 </body>

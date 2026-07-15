@@ -933,3 +933,37 @@ right: auto;
 .checkbox-label-group label {
   margin: 0;
 }
+
+.dragging{
+
+    opacity:.7;
+
+    border:2px dashed #4a90e2;
+
+    background:#eef7ff;
+
+}
+
+.drag-handle {
+    cursor: grab;
+
+    font-size: 18px;
+
+    color: #888;
+
+    user-select: none;
+
+    margin-right: 8px;
+
+    display: inline-flex;
+
+    align-items: center;
+}
+
+.drag-handle:hover {
+    color: #2563eb;
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}

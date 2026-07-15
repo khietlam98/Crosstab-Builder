@@ -1,3 +1,5 @@
+let sortable = null;
+
 const projectSettings = {
   N2: {
     name: "N2",
@@ -301,6 +303,9 @@ const demographicTemplates = {
   ]
 };
 
+const STORAGE_KEY =
+  "crosstab_builder_session_v1";
+
 let tables = [];
 let editingIndex = null;
 let editingArrayGroupId = null;
@@ -338,6 +343,12 @@ const useRankBox =
 
 const useRankCheckbox =
   document.getElementById("useRank");
+
+  const rankRLBox =
+  document.getElementById("rankRLBox");
+
+const rankRLCodesInput =
+  document.getElementById("rankRLCodes");
 
 const sharedMeanSetupBox =
   document.getElementById("sharedMeanSetupBox");
@@ -437,6 +448,28 @@ function isDSLine(line) {
   return String(line || "")
     .trim()
     .startsWith("**D/S");
+}
+
+function toggleRankRLBox() {
+
+  if (
+    useRankCheckbox.checked
+  ) {
+
+    rankRLBox.classList.remove(
+      "hidden"
+    );
+
+  } else {
+
+    rankRLBox.classList.add(
+      "hidden"
+    );
+
+    rankRLCodesInput.value = "";
+
+  }
+
 }
 
 function removeLeadingQuestionNumber(value) {
@@ -673,6 +706,7 @@ function resetSplitRows() {
 function getSplitRowsFromInput() {
   const rows = [...splitRowsContainer.querySelectorAll(".split-row")];
 
+  
   return rows.map(row => {
     const label = row.querySelector(".split-row-label").value.trim();
     const variable = row.querySelector(".split-row-variable").value.trim();
@@ -705,6 +739,7 @@ function parseRankingMetrics(text) {
     .split("\n")
     .map(line => line.trim())
     .filter(line => line !== "");
+
 
   return lines.map(line => {
     /*
@@ -913,7 +948,7 @@ function toggleRankBox() {
     "multiple_choice",
     "summary_table",
     "ranking_table",
-    "array",
+    "array",  
     "demographic",
     "listout_table"
   ];
@@ -954,6 +989,24 @@ function toggleAnswerOptionsBox() {
   const questionType =
     questionTypeSelect.value;
 
+  /*
+    Question Types that never use
+    Answer Options.
+  */
+  if (
+    questionType === "summary_table" ||
+    questionType === "ranking_table" ||
+    questionType === "listout_table"
+  ) {
+    answerOptionsBox.classList.add("hidden");
+
+    useCustomNetGroupsCheckbox.checked = false;
+    customNetGroupBox.classList.add("hidden");
+    customDSBox.classList.add("hidden");
+
+    return;
+  }
+
   const rowType =
     normalizeRowType(
       rowTypeSelect.value
@@ -969,21 +1022,13 @@ function toggleAnswerOptionsBox() {
     isMultipleChoice || isCustomCode;
 
   if (shouldShowAnswerOptions) {
-    answerOptionsBox.classList.remove(
-      "hidden"
-    );
+    answerOptionsBox.classList.remove("hidden");
   } else {
-    answerOptionsBox.classList.add(
-      "hidden"
-    );
+    answerOptionsBox.classList.add("hidden");
 
     useCustomNetGroupsCheckbox.checked = false;
-    customNetGroupBox.classList.add(
-      "hidden"
-    );
-    customDSBox.classList.add(
-      "hidden"
-    );
+    customNetGroupBox.classList.add("hidden");
+    customDSBox.classList.add("hidden");
   }
 }
 
@@ -1093,10 +1138,13 @@ function buildDemographicTemplateLines(table) {
         lines.push(line);
       });
 
+
+    console.log("rankRLCodes =", rankRLCodes);
     buildRowsFromAnswerOptions(
       table.answerOptions,
       table.questionCode,
-      table.customNetGroups || []
+      table.customNetGroups || [],
+        table.rankRLCodes || ""
     ).forEach(line => {
       lines.push(line);
     });
@@ -1672,11 +1720,16 @@ function buildQuestionTextLine(table) {
   }
 
   if (
-    table.questionType === "summary_table" ||
-    table.questionType === "ranking_table"
-  ) {
-    return " " + cleanQuestionText;
-  }
+  table.questionType === "summary_table"
+) {
+  return " " + cleanQuestionText.toUpperCase();
+}
+
+if (
+  table.questionType === "ranking_table"
+) {
+  return " " + cleanQuestionText;
+}
 
   const questionNumber =
     getQuestionNumber(
@@ -2471,8 +2524,11 @@ function cleanAnswerOptionsText(value) {
 function buildRowsFromAnswerOptions(
   answerOptionsText,
   questionCode,
-  netGroups = []
+  netGroups = [],
+  rankRLCodes = []
 ) {
+  
+
   if (!answerOptionsText) {
     return [];
   }
@@ -2481,6 +2537,12 @@ function buildRowsFromAnswerOptions(
     .split("\n")
     .map(line => line.trim())
     .filter(line => line !== "");
+
+    const rlCodes = new Set(
+  parseRankRLCodes(
+    rankRLCodes || ""
+  ) || []
+);
 
   return lines.map(line => {
     const parsed =
@@ -2512,14 +2574,28 @@ function buildRowsFromAnswerOptions(
       ? "   "
       : " ";
 
+        const suffix =
+  rlCodes.has(
+    Number(code)
+  )
+    ? "RL"
+    : "";
+
+    console.log({
+  code,
+  suffix,
+  hasRL: rlCodes.has(Number(code))
+});
+
     return formatSyntaxRow(
-      label,
-      questionCode + " (" + code + ")",
-      {
-        indent,
-        logicColumn: 34
-      }
-    );
+  label,
+  questionCode + " (" + code + ")",
+  {
+    indent,
+    logicColumn: 34,
+    suffix
+  }
+);
   });
 }
 
@@ -2604,6 +2680,12 @@ function parseMeanCodeInput(value) {
   return [
     ...new Set(codes)
   ].sort((a, b) => a - b);
+}
+
+function parseRankRLCodes(value) {
+
+  return parseMeanCodeInput(value);
+
 }
 
 function compressMeanCodes(codes) {
@@ -3462,7 +3544,7 @@ function parseSummaryBlockHeader(line) {
       .replace(/\.$/, "")
       .toUpperCase(),
 
-    title: normalizeSummaryTitle(rawTitle),
+    title: normalizeSummaryTitle(rawTitle).toUpperCase(),
 
     dsPositiveCode: dsInfo.positiveCode,
     dsNegativeCode: dsInfo.negativeCode,
@@ -3918,6 +4000,7 @@ function buildSummarySetup() {
           <input class="summary-suffix-input" type="text" value="SX,L-" />
         </div>
       </div>
+      
     `;
 
     summaryBlockSetupContainer.appendChild(card);
@@ -3974,7 +4057,11 @@ function getSummaryBlocksFromSetup() {
     };
 
     return {
-      title: card.querySelector(".summary-title-input").value.trim() || parsedBlock.title,
+      title:
+  normalizeSummaryTitle(
+    card.querySelector(".summary-title-input").value
+  ).toUpperCase() ||
+  normalizeSummaryTitle(parsedBlock.title).toUpperCase(),
       positiveLabel: card.querySelector(".summary-positive-select")?.value || "",
       negativeLabel: card.querySelector(".summary-negative-select")?.value || "",
       suffix: card.querySelector(".summary-suffix-input").value.trim() || "SX,L-",
@@ -4030,7 +4117,7 @@ function buildSummaryTableLines(
 
     lines.push(
       formatSyntaxRow(
-        block.title,
+        normalizeSummaryTitle(block.title).toUpperCase(),
         calcText,
         {
           indent: " ",
@@ -4046,14 +4133,14 @@ function buildSummaryTableLines(
         formatSummaryLogic(row.logic);
 
       lines.push(
-        formatSyntaxRow(
-          row.label,
-          logic,
-          {
-            indent: "   ",
-            logicColumn: 34
-          }
-        )
+       formatSyntaxRow(
+  normalizeSummaryTitle(row.label).toUpperCase(),
+  logic,
+  {
+    indent: "   ",
+    logicColumn: 34
+  }
+)
       );
     });
 
@@ -4068,6 +4155,72 @@ function collectSharedFeatureState() {
   const useRank =
     useRankCheckbox.checked === true;
 
+  let rankRLCodes = "";
+
+  /*
+    Parse + normalize RL Codes
+  */
+  if (
+    useRank &&
+    rankRLCodesInput.value.trim()
+  ) {
+    const rlCodes =
+      parseRankRLCodes(
+        rankRLCodesInput.value
+      );
+
+    if (rlCodes === null) {
+      alert(
+        "Please enter valid RL Codes.\n\n" +
+        "Example:\n" +
+        "9-12\n" +
+        "9,10,11,12"
+      );
+
+      return null;
+    }
+
+    const availableCodes =
+  getMeanAvailableCodesFromCurrentInput();
+
+/*
+  Validate RL codes against
+  available answer codes.
+*/
+if (
+  Array.isArray(availableCodes) &&
+  availableCodes.length > 0
+) {
+  const availableCodeSet =
+    new Set(
+      availableCodes.map(String)
+    );
+
+  const missingCodes =
+    rlCodes.filter(code => {
+      return !availableCodeSet.has(
+        String(code)
+      );
+    });
+
+  if (missingCodes.length > 0) {
+    alert(
+      "These RL codes were not found in the answer rows:\n\n" +
+      missingCodes.join(", ")
+    );
+
+    return null;
+  }
+}
+
+    rankRLCodes =
+      compressMeanCodes(rlCodes);
+
+    // Auto normalize textbox
+    rankRLCodesInput.value =
+      rankRLCodes;
+  }
+
   const useMean =
     useMeanCheckbox.checked === true;
 
@@ -4077,6 +4230,7 @@ function collectSharedFeatureState() {
   if (!useMean) {
     return {
       useRank,
+      rankRLCodes,
       useMean: false,
       meanCodeRange: ""
     };
@@ -4110,9 +4264,10 @@ function collectSharedFeatureState() {
     Array.isArray(availableCodes) &&
     availableCodes.length > 0
   ) {
-    const availableCodeSet = new Set(
-      availableCodes.map(String)
-    );
+    const availableCodeSet =
+      new Set(
+        availableCodes.map(String)
+      );
 
     const missingCodes =
       meanCodes.filter(code => {
@@ -4139,6 +4294,7 @@ function collectSharedFeatureState() {
 
   return {
     useRank,
+    rankRLCodes,
     useMean: true,
     meanCodeRange
   };
@@ -4178,6 +4334,7 @@ if (!sharedFeatureState) {
 
 const {
   useRank,
+    rankRLCodes,
   useMean,
   meanCodeRange
 } = sharedFeatureState;
@@ -4220,6 +4377,7 @@ if (
         useST: false,
         useDS: false,
         useRank,
+          rankRLCodes,
 useMean,
 meanCodeRange,
         subtitleOnly: "",
@@ -4268,6 +4426,7 @@ meanCodeRange,
       useDS: useDSCheckbox.checked,
       
       useRank,
+        rankRLCodes,
 useMean,
 meanCodeRange,
 
@@ -4347,6 +4506,7 @@ meanCodeRange,
   useST: false,
   useDS: useDSCheckbox.checked,
   useRank,
+    rankRLCodes,
 useMean,
 meanCodeRange,
 
@@ -4397,6 +4557,7 @@ meanCodeRange,
     useDS: false,
 
     useRank,
+      rankRLCodes,
 useMean,
 meanCodeRange,
     
@@ -4446,6 +4607,7 @@ meanCodeRange,
       useST: false,
       useDS: false,
        useRank,
+         rankRLCodes,
 useMean,
 meanCodeRange,
       subtitleOnly: "",
@@ -4521,6 +4683,7 @@ return questionCodes.map((code, index) => {
     useDS: useDSCheckbox.checked,
 
     useRank,
+      rankRLCodes,
 useMean,
 meanCodeRange,
 
@@ -4818,6 +4981,7 @@ function addTable() {
   }
 
   renderInputList();
+  saveSession();
   generateOutput();
   clearInputFields();
 }
@@ -4897,6 +5061,11 @@ function editArrayGroup(index) {
 
   useRankCheckbox.checked =
   firstTable.useRank === true;
+  
+  rankRLCodesInput.value =
+  firstTable.rankRLCodes || "";
+
+toggleRankRLBox();
 
 meanCodeRangeInput.value =
   firstTable.meanCodeRange || "";
@@ -4982,6 +5151,7 @@ toggleMeanSetupUI();
   cancelEditBtn.classList.remove("hidden");
 
   renderInputList();
+  saveSession();
 }
 
 function editTable(index) {
@@ -5013,6 +5183,11 @@ function editTable(index) {
   useRankCheckbox.checked =
   table.useRank === true;
   
+  rankRLCodesInput.value =
+  table.rankRLCodes || "";
+
+toggleRankRLBox();
+
   useMeanCheckbox.checked =
   table.useMean === true;
 
@@ -5295,6 +5470,7 @@ function deleteTable(index) {
   }
 
   renderInputList();
+  saveSession();
   generateOutput();
 }
 
@@ -5459,6 +5635,7 @@ function renderInputList() {
 
     inputList.appendChild(item);
   });
+  initSortable();
 }
 
 function generateOutput() {
@@ -5699,11 +5876,13 @@ function generateOutput() {
       const netGroupLines = buildCustomNetGroupLines(table);
       netGroupLines.forEach(line => block.push(line));
 
-    let answerRows =
+    console.log("table.rankRLCodes =", table.rankRLCodes);
+      let answerRows =
   buildRowsFromAnswerOptions(
     table.answerOptions,
     table.questionCode,
-    table.customNetGroups || []
+    table.customNetGroups || [],
+      table.rankRLCodes || ""
   );
 
 answerRows =
@@ -5796,6 +5975,10 @@ safeSetChecked(
 
 toggleQuestionTypeUI();
 
+rankRLCodesInput.value = "";
+
+rankRLBox.classList.add("hidden");
+
 safeSetValue(
   meanCodeRangeInput,
   ""
@@ -5884,6 +6067,7 @@ function clearAll() {
   exitEditMode();
   clearInputFields();
   renderInputList();
+  saveSession();
   generateOutput();
 }
 
@@ -6066,6 +6250,13 @@ function buildMultipleChoiceAnswerRows(
       ? "   "
       : " ";
 
+         const suffix =
+  rlCodes.has(
+    Number(code)
+  )
+    ? "RL"
+    : "";
+
     return formatSyntaxRow(
       option.label,
       variableName + " (1)",
@@ -6179,11 +6370,30 @@ function formatSyntaxRow(
   );
 }
 
+function getRankSuffix(
+  answerCode,
+  rankRLCodes
+) {
+  if (!rankRLCodes) {
+    return "";
+  }
+
+  const rlCodes = new Set(
+    parseRankRLCodes(rankRLCodes) || []
+  );
+
+  return rlCodes.has(
+    Number(answerCode)
+  )
+    ? "RL"
+    : "";
+}
 const summarySetupPanel = document.getElementById("summarySetupPanel");
 
 function toggleQuestionTypeUI() {
   const questionType = questionTypeSelect.value;
   toggleRankBox();
+  toggleRankRLBox();
     toggleMeanSetupUI();
 
   summarySetupPanel.classList.add("hidden");
@@ -6304,12 +6514,7 @@ useMeanCheckbox.addEventListener(
 
 useRankCheckbox.addEventListener(
   "change",
-  function () {
-    /*
-      Không cần generate ngay vì trạng thái chỉ được
-      lưu khi Add Table hoặc Update Table.
-    */
-  }
+  toggleRankRLBox
 );
 
 rankingSplitModal.addEventListener("click", function (event) {
@@ -6392,12 +6597,12 @@ questionTypeSelect.addEventListener(
       Ranking Table mặc định bật Rank.
       User vẫn có thể bỏ tick sau đó.
     */
-    if (
-      questionTypeSelect.value ===
-      "ranking_table"
-    ) {
-      useRankCheckbox.checked = true;
-    }
+    // if (
+    //   questionTypeSelect.value ===
+    //   "ranking_table"
+    // ) {
+    //   useRankCheckbox.checked = true;
+    // }
 
     if (
       questionTypeSelect.value ===
@@ -6450,6 +6655,7 @@ useSTCheckbox.addEventListener("change", toggleSubtitleBox);
 baseTypeSelect.addEventListener("change", function () {
   toggleAskedBaseBox();
 });
+
 
 questionTextInput.addEventListener(
   "paste",
@@ -6887,3 +7093,126 @@ document.addEventListener(
     }
   }
 );
+
+document.addEventListener(
+  "DOMContentLoaded",
+  function () {
+
+    loadSession();
+
+  }
+);
+
+function saveSession() {
+  try {
+    const session = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      tables,
+      editingIndex
+    };
+
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(session)
+    );
+
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function loadSession() {
+  try {
+
+    const raw =
+      localStorage.getItem(STORAGE_KEY);
+
+    if (!raw) return;
+
+    const session =
+      JSON.parse(raw);
+
+    if (!session?.tables) return;
+
+    tables =
+      session.tables;
+
+    editingIndex =
+      session.editingIndex ?? null;
+
+    renderInputList();
+
+    /*
+      Rebuild Output Syntax
+      from Input List.
+    */
+    if (tables.length > 0) {
+      generateOutput();
+    }
+
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+generateBtn.addEventListener(
+    "click",
+    function () {
+
+        generateOutput();
+
+        saveSession();
+
+    }
+);
+
+function initSortable() {
+
+  const list =
+    document.getElementById("inputList");
+
+  if (!list) return;
+
+  if (sortable) {
+    sortable.destroy();
+  }
+
+  sortable = new Sortable(list, {
+
+    animation: 180,
+
+    ghostClass: "dragging",
+
+    onEnd(event) {
+
+      if (
+        event.oldIndex ===
+        event.newIndex
+      ) {
+        return;
+      }
+
+      const movedTable =
+        tables.splice(
+          event.oldIndex,
+          1
+        )[0];
+
+      tables.splice(
+        event.newIndex,
+        0,
+        movedTable
+      );
+
+      renderInputList();
+
+      generateOutput();
+
+      saveSession();
+
+    }
+
+  });
+
+}
