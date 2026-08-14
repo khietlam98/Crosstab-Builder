@@ -310,6 +310,8 @@ let tables = [];
 let editingIndex = null;
 let editingArrayGroupId = null;
 let editingArrayGroupStartIndex = null;
+let pendingArraySampleSelections = [];
+let autoSTFromArray = false;
 
 const projectTypeSelect = document.getElementById("projectType");
 const questionCodeInput = document.getElementById("questionCode");
@@ -366,14 +368,11 @@ const subtitleBox = document.getElementById("subtitleBox");
 const subtitleOnlyInput = document.getElementById("subtitleOnly");
 const manualUseIndexInput = document.getElementById("manualUseIndex");
 
-const baseTypeSelect = document.getElementById("baseType");
 const askedBaseBox = document.getElementById("askedBaseBox");
 const askedBaseTextBox = document.getElementById("askedBaseTextBox");
 const askedBaseTextInput = document.getElementById("askedBaseText");
 
 const arraySampleSetupBox = document.getElementById("arraySampleSetupBox");
-const useArraySampleSetupCheckbox = document.getElementById("useArraySampleSetup");
-const arraySampleExtraRowsInput = document.getElementById("arraySampleExtraRows");
 const buildArraySampleBtn = document.getElementById("buildArraySampleBtn");
 
 const arraySampleModal = document.getElementById("arraySampleModal");
@@ -819,6 +818,38 @@ const ALL_QUESTION_TYPES = new Set([
   "ranking_table",
   "listout_table"
 ]);
+
+
+function getEffectiveQuestionType() {
+  const questionCodes =
+    expandQuestionCodes(
+      questionCodeInput.value.trim()
+    );
+
+  /*
+    Single Choice / Array được phân biệt
+    bằng Question Code.
+
+    Q1     => Single Choice
+    Q1:5   => Array
+  */
+  if (
+    questionTypeSelect.value ===
+      "single_choice" &&
+    questionCodes.length > 1
+  ) {
+    return "array";
+  }
+
+  return questionTypeSelect.value;
+}
+
+function isCurrentArray() {
+  return (
+    getEffectiveQuestionType() ===
+    "array"
+  );
+}
 
 function isKnownQuestionType(questionType) {
   return ALL_QUESTION_TYPES.has(
@@ -1606,6 +1637,19 @@ function expandQuestionCodes(input) {
   return [];
 }
 
+function isQuestionCodeRange(value) {
+  const raw =
+    String(value || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "");
+
+  return (
+    /^([A-Z0-9_]*?)(\d+)(?::|-)([A-Z0-9_]*?)(\d+)$/
+      .test(raw)
+  );
+}
+
 function buildQuestionCodeLine(questionCode, index) {
   const cleanCode = normalizeQuestionCode(questionCode);
 
@@ -1750,19 +1794,37 @@ function getTnValue(questionType, projectType) {
   return setting.baseTnByType[questionType] || "1";
 }
 
+function getCurrentBaseType() {
+  return askedBaseTextInput.value.trim()
+    ? "asked_base"
+    : "total_sample";
+}
+
 function buildBaseLine(table) {
-  const tnValue = getTnValue(table.questionType, table.projectType);
-  const askedBaseText = String(table.askedBaseText || "").trim();
+  const tnValue =
+    getTnValue(
+      table.questionType,
+      table.projectType
+    );
 
-  if (table.baseType === "asked_base") {
-    if (!askedBaseText) {
-      return " BASE=TOTAL SAMPLE^TN^" + tnValue;
-    }
+  const askedBaseText =
+    String(
+      table.askedBaseText || ""
+    ).trim();
 
-    return " BASE=" + askedBaseText + "^TN^" + tnValue;
+  if (askedBaseText) {
+    return (
+      " BASE=" +
+      askedBaseText +
+      "^TN^" +
+      tnValue
+    );
   }
 
-  return " BASE=TOTAL SAMPLE^TN^" + tnValue;
+  return (
+    " BASE=TOTAL SAMPLE^TN^" +
+    tnValue
+  );
 }
 
 function formatYYYYMMDD(date) {
@@ -2525,77 +2587,126 @@ function buildRowsFromAnswerOptions(
   answerOptionsText,
   questionCode,
   netGroups = [],
-  rankRLCodes = []
+  rankRLCodes = ""
 ) {
-  
-
   if (!answerOptionsText) {
     return [];
   }
 
-  const lines = String(answerOptionsText || "")
-    .split("\n")
-    .map(line => line.trim())
-    .filter(line => line !== "");
+  const rlCodes = new Set(
+    parseRankRLCodes(
+      rankRLCodes || ""
+    ) || []
+  );
 
-    const rlCodes = new Set(
-  parseRankRLCodes(
-    rankRLCodes || ""
-  ) || []
-);
+  /*
+    Parse tất cả Answer Options trước.
+  */
+  const parsedOptions =
+    String(answerOptionsText || "")
+      .split("\n")
+      .map(line => line.trim())
+      .filter(line => line !== "")
+      .map(line => {
+        const parsed =
+          parseAnswerOptionLine(line);
 
-  return lines.map(line => {
-    const parsed =
-      parseAnswerOptionLine(line);
+        if (!parsed) {
+          return {
+            isValid: false,
+            rawLine: line,
+            code: "",
+            label: "",
+            insideNet: false
+          };
+        }
 
-    if (!parsed) {
+        return {
+          isValid: true,
+          rawLine: line,
+          code: parsed.code,
+          label: parsed.label,
+
+          /*
+            Kiểm tra Answer Option có thuộc
+            ít nhất một NET Group hay không.
+          */
+          insideNet:
+            isAnswerCodeInsideNetGroups(
+              parsed.code,
+              netGroups
+            )
+        };
+      });
+
+  /*
+    Stable partition:
+
+    1. Answer Options thuộc NET ở trên.
+    2. Answer Options không thuộc NET xuống dưới.
+    3. Giữ nguyên thứ tự trong từng nhóm.
+  */
+  const optionsInsideNet =
+    parsedOptions.filter(option => {
+      return (
+        option.isValid &&
+        option.insideNet
+      );
+    });
+
+  const optionsOutsideNet =
+    parsedOptions.filter(option => {
+      return (
+        option.isValid &&
+        !option.insideNet
+      );
+    });
+
+  const invalidOptions =
+    parsedOptions.filter(option => {
+      return !option.isValid;
+    });
+
+  const sortedOptions = [
+    ...optionsInsideNet,
+    ...optionsOutsideNet,
+    ...invalidOptions
+  ];
+
+  return sortedOptions.map(option => {
+    if (!option.isValid) {
       return (
         " *** ERROR: INVALID ANSWER OPTION - " +
-        line +
+        option.rawLine +
         " ***"
       );
     }
 
-    const code = parsed.code;
-    const label = parsed.label;
-
-    const shouldIndent =
-      isAnswerCodeInsideNetGroups(
-        code,
-        netGroups
-      );
-
-    /*
-      Rule đúng:
-      Chỉ indent answer rows nếu code của nó
-      nằm trong Total / Net Group.
-    */
-    const indent = shouldIndent
-      ? "   "
-      : " ";
-
-        const suffix =
-  rlCodes.has(
-    Number(code)
-  )
-    ? "RL"
-    : "";
-
-    console.log({
-  code,
-  suffix,
-  hasRL: rlCodes.has(Number(code))
-});
+    const suffix =
+      rlCodes.has(Number(option.code))
+        ? "RL"
+        : "";
 
     return formatSyntaxRow(
-  label,
-  questionCode + " (" + code + ")",
-  {
-    indent,
-    logicColumn: 34,
-    suffix
-  }
-);
+      option.label,
+      questionCode +
+        " (" +
+        option.code +
+        ")",
+      {
+        /*
+          Answer thuộc NET được indent.
+          Answer ngoài NET không indent.
+        */
+        indent:
+          option.insideNet
+            ? "   "
+            : " ",
+
+        logicColumn: 34,
+        suffix
+      }
+    );
   });
 }
 
@@ -4303,10 +4414,26 @@ if (
 function collectTablesFromInput() {
   const rawQuestionCode = questionCodeInput.value.trim();
   const questionCodes = expandQuestionCodes(rawQuestionCode);
+
+  const effectiveQuestionType =
+  questionTypeSelect.value ===
+    "single_choice" &&
+  questionCodes.length > 1
+    ? "array"
+    : questionTypeSelect.value;
+
   const questionText =
   normalizeQuestionText(
     questionTextInput.value
   );
+
+  const currentAskedBaseText =
+  askedBaseTextInput.value.trim();
+
+const currentBaseType =
+  currentAskedBaseText
+    ? "asked_base"
+    : "total_sample";
 
 questionTextInput.value = questionText;
 
@@ -4339,19 +4466,6 @@ const {
   meanCodeRange
 } = sharedFeatureState;
 
-  const isArrayAskedBase =
-  questionTypeSelect.value === "array" &&
-  baseTypeSelect.value === "asked_base";
-
-if (
-  baseTypeSelect.value === "asked_base" &&
-  !isArrayAskedBase &&
-  !askedBaseTextInput.value.trim()
-) {
-  alert("Please enter Asked Base Text.");
-  return null;
-}
-
   if (questionTypeSelect.value === "ranking_table") {
     const metrics = parseRankingMetrics(rankingMetricDefinitionsInput.value);
 
@@ -4381,7 +4495,7 @@ if (
 useMean,
 meanCodeRange,
         subtitleOnly: "",
-        baseType: baseTypeSelect.value,
+        baseType: currentBaseType,
         askedBaseText: askedBaseTextInput.value.trim(),
         manualUseIndex: "",
         answerOptions: "",
@@ -4431,7 +4545,7 @@ useMean,
 meanCodeRange,
 
       subtitleOnly: "",
-      baseType: baseTypeSelect.value,
+      baseType: currentBaseType,
       askedBaseText: askedBaseTextInput.value.trim(),
       manualUseIndex: "",
       answerOptions: answerOptionsInput.value.trim(),
@@ -4511,7 +4625,7 @@ useMean,
 meanCodeRange,
 
   subtitleOnly: "",
-  baseType: baseTypeSelect.value,
+  baseType: currentBaseType,
   askedBaseText:
     askedBaseTextInput.value.trim(),
 
@@ -4611,7 +4725,7 @@ meanCodeRange,
 useMean,
 meanCodeRange,
       subtitleOnly: "",
-      baseType: baseTypeSelect.value,
+      baseType: currentBaseType,
       askedBaseText: askedBaseTextInput.value.trim(),
       manualUseIndex: "",
       answerOptions: "",
@@ -4627,30 +4741,13 @@ meanCodeRange,
     return null;
   }
 
-const askedBaseItems = askedBaseTextInput.value
-  .split(",")
-  .map(item => item.trim())
-  .filter(item => item !== "");
-
-if (
-  baseTypeSelect.value === "asked_base" &&
-  !isArrayAskedBase &&
-  questionCodes.length > 1
-) {
-
-  if (askedBaseItems.length > 1 && askedBaseItems.length !== questionCodes.length) {
-    alert(
-      "Number of Asked Base items must match number of question codes.\n\n" +
-      "Question codes: " + questionCodes.length + "\n" +
-      "Asked Base items: " + askedBaseItems.length
-    );
-    return null;
-  }
-}
-
   const subtitleLines = getSubtitleLines();
 
-  if (useSTCheckbox.checked && questionCodes.length > 1 && subtitleLines.length > 0) {
+  if (
+  effectiveQuestionType === "array" &&
+  questionCodes.length > 1 &&
+  subtitleLines.length > 0
+) {
     if (subtitleLines.length !== questionCodes.length) {
       alert(
         "Number of subtitle lines must match number of question codes.\n\n" +
@@ -4661,25 +4758,56 @@ if (
     }
   }
 
-  const isArrayRange = questionTypeSelect.value === "array" && questionCodes.length > 1;
+  const isArrayRange =
+  effectiveQuestionType === "array" &&
+  questionCodes.length > 1;
+  
 const arrayGroupId = isArrayRange ? "array_" + Date.now() : "";
 
-const arraySampleSelections =
-  questionTypeSelect.value === "array" &&
-  baseTypeSelect.value === "asked_base" &&
-  useArraySampleSetupCheckbox.checked
-    ? getArraySampleSelections()
-    : [];
+const isUsingArraySampleSetup =
+  effectiveQuestionType === "array";
 
+let arraySampleSelections = [];
+
+if (isUsingArraySampleSetup) {
+  /*
+    Ưu tiên dữ liệu đang có trong modal.
+    Nếu modal không còn DOM thì dùng dữ liệu đã Save.
+  */
+  const currentSelections =
+    getArraySampleSelections();
+
+  arraySampleSelections =
+    currentSelections.length > 0
+      ? currentSelections
+      : pendingArraySampleSelections;
+
+  if (
+    arraySampleSelections.length !==
+    questionCodes.length
+  ) {
+    alert(
+      "Please click Build Array Sample Setup, select a sample for every Array item, then click Save."
+    );
+
+    return null;
+  }
+  /*
+    Đồng bộ state lần cuối trước khi tạo table.
+  */
+  pendingArraySampleSelections =
+    arraySampleSelections;
+}
 
 return questionCodes.map((code, index) => {
   return {
     projectType: projectTypeSelect.value || "N2",
     questionCode: code,
-    questionType: questionTypeSelect.value,
+    questionType: effectiveQuestionType,
     rowType: rowTypeSelect.value,
     questionText,
-    useST: useSTCheckbox.checked,
+    useST:
+  effectiveQuestionType === "array",
     useDS: useDSCheckbox.checked,
 
     useRank,
@@ -4688,20 +4816,17 @@ useMean,
 meanCodeRange,
 
     subtitleOnly: subtitleLines[index] || subtitleLines[0] || "",
-    baseType: baseTypeSelect.value,
+    baseType:
+  arraySampleSelections[index]?.sampleName
+    ? "asked_base"
+    : "total_sample",
 
-    askedBaseText:
-      arraySampleSelections[index]?.sampleName ||
-      askedBaseItems[index] ||
-      askedBaseItems[0] ||
-      "",
+   askedBaseText:
+  arraySampleSelections[index]?.sampleName || "",
 
     useArraySampleSetup:
-      questionTypeSelect.value === "array" &&
-      baseTypeSelect.value === "asked_base" &&
-      useArraySampleSetupCheckbox.checked,
+  effectiveQuestionType === "array",
 
-    arraySampleExtraRowsRaw: arraySampleExtraRowsInput.value.trim(),
 
     arraySampleSelections: arraySampleSelections.map(item => item.sampleName || ""),
 
@@ -5080,19 +5205,21 @@ toggleMeanSetupUI();
 
   projectTypeSelect.value = firstTable.projectType || "N2";
   questionCodeInput.value = compressQuestionCodesToRange(questionCodes);
-  questionTypeSelect.value = "array";
+  questionTypeSelect.value =
+  "single_choice";
+
+useSTCheckbox.checked = true;
   questionTextInput.value = firstTable.questionText || "";
 
   populateRowTypeOptions(normalRowTypeOptions, firstTable.rowType || "");
   rowTypeSelect.value = firstTable.rowType || "";
 
-  baseTypeSelect.value = firstTable.baseType || "total_sample";
   askedBaseTextInput.value = groupTables
     .map(table => table.askedBaseText || "")
     .filter(value => value !== "")
     .join(",");
 
-  useSTCheckbox.checked = !!firstTable.useST;
+  useSTCheckbox.checked = true;
   useDSCheckbox.checked = firstTable.useDS !== false;
 
   subtitleOnlyInput.value = groupTables
@@ -5121,8 +5248,6 @@ toggleMeanSetupUI();
   }
 
   if (firstTable.baseType === "asked_base") {
-    arraySampleExtraRowsInput.value = firstTable.arraySampleExtraRowsRaw || "";
-    useArraySampleSetupCheckbox.checked = firstTable.useArraySampleSetup !== false;
 
     toggleAskedBaseBox();
 
@@ -5130,13 +5255,21 @@ toggleMeanSetupUI();
 
     const selects = [...arraySampleTableContainer.querySelectorAll(".array-sample-select")];
 
-    const selections = groupTables.map(table => {
-      return table.askedBaseText || "";
-    });
+ const selections =
+  groupTables.map(table => {
+    return {
+      sampleName:
+        table.askedBaseText || ""
+    };
+  });
 
-    selects.forEach((select, i) => {
-      select.value = selections[i] || "";
-    });
+pendingArraySampleSelections =
+  selections;
+
+selects.forEach((select, index) => {
+  select.value =
+    selections[index]?.sampleName || "";
+});
 
     closeArraySampleModal();
   }
@@ -5170,14 +5303,19 @@ function editTable(index) {
 
   projectTypeSelect.value = table.projectType || "N2";
   questionCodeInput.value = table.questionCode;
-  questionTypeSelect.value = table.questionType;
+  questionTypeSelect.value =
+  table.questionType === "array"
+    ? "single_choice"
+    : table.questionType;
   rowTypeSelect.value = table.rowType || "";
   questionTextInput.value = table.questionText || "";
 
-  baseTypeSelect.value = table.baseType || "total_sample";
   askedBaseTextInput.value = table.askedBaseText || "";
 
-  useSTCheckbox.checked = !!table.useST;
+  useSTCheckbox.checked =
+  table.questionType === "array"
+    ? true
+    : !!table.useST;
   useDSCheckbox.checked = table.useDS !== false;
 
   useRankCheckbox.checked =
@@ -5247,14 +5385,12 @@ if (table.questionType === "summary_table") {
   }
 
   if (table.baseType === "asked_base") {
-    arraySampleExtraRowsInput.value = table.arraySampleExtraRowsRaw || "";
-    useArraySampleSetupCheckbox.checked = table.useArraySampleSetup !== false;
 
     toggleAskedBaseBox();
 
     // Rebuild popup table so old selection can be restored
-    if (table.useArraySampleSetup) {
-      buildArraySampleSetup();
+    if (table.questionType === "array") {
+  buildArraySampleSetup();
 
       const selects = [...arraySampleTableContainer.querySelectorAll(".array-sample-select")];
       const selections = table.arraySampleSelections || [];
@@ -5848,67 +5984,109 @@ function generateOutput() {
       }
     }
 
-    if (table.manualUseIndex) {
-      block.push("USE=" + table.manualUseIndex + ", " + table.questionCode);
-   } else if (
+   /*
+  Manual USE luôn được ưu tiên.
+*/
+if (table.manualUseIndex) {
+  block.push(
+    "USE=" +
+    table.manualUseIndex +
+    "," +
+    table.questionCode
+  );
+
+  blocks.push(
+    block.join("\n")
+  );
+
+  return;
+}
+
+/*
+  Array item thứ hai trở đi:
+  chỉ xuất header + subtitle + base + USE.
+*/
+if (
   table.questionType === "array" &&
   table.arrayGroupId &&
   table.arrayPosition > 0
 ) {
-  const firstArrayIndex = getFirstArrayTableIndex(table);
+  const firstArrayIndex =
+    getFirstArrayTableIndex(table);
 
   if (firstArrayIndex) {
-    block.push("USE=" + firstArrayIndex + ", " + table.questionCode);
+    block.push(
+      "USE=" +
+      firstArrayIndex +
+      "," +
+      table.questionCode
+    );
   } else {
-    block.push("*** ERROR: ARRAY FIRST TABLE NOT FOUND ***");
+    block.push(
+      "*** ERROR: ARRAY FIRST TABLE NOT FOUND ***"
+    );
   }
 
-  blocks.push(block.join("\n"));
+  blocks.push(
+    block.join("\n")
+  );
+
   return;
+}
 
-} else if (normalizeRowType(table.rowType) === "custom_code") {
-      const dsLine = buildCustomDSLine(table);
+/*
+  Table đầu tiên của Array tiếp tục đi xuống
+  để tạo đầy đủ D/S, NET và Answer Rows.
+*/
+if (
+  normalizeRowType(table.rowType) ===
+  "custom_code"
+) {
+  const dsLine =
+    buildCustomDSLine(table);
 
-      if (dsLine) {
-        block.push(dsLine);
-      }
+  if (dsLine) {
+    block.push(dsLine);
+  }
 
-      const netGroupLines = buildCustomNetGroupLines(table);
-      netGroupLines.forEach(line => block.push(line));
+  const netGroupLines =
+    buildCustomNetGroupLines(table);
 
-    console.log("table.rankRLCodes =", table.rankRLCodes);
-      let answerRows =
-  buildRowsFromAnswerOptions(
-    table.answerOptions,
-    table.questionCode,
-    table.customNetGroups || [],
+  netGroupLines.forEach(line => {
+    block.push(line);
+  });
+
+  let answerRows =
+    buildRowsFromAnswerOptions(
+      table.answerOptions,
+      table.questionCode,
+      table.customNetGroups || [],
       table.rankRLCodes || ""
-  );
+    );
 
-answerRows =
-  insertMeanLineIntoRows(
-    answerRows,
-    table
-  );
+  answerRows =
+    insertMeanLineIntoRows(
+      answerRows,
+      table
+    );
 
-answerRows.forEach(line => {
-  block.push(line);
-});
+  answerRows.forEach(line => {
+    block.push(line);
+  });
+} else {
+  let rowLines =
+    buildRowTemplateLines(table);
 
-    } else {
-      let rowLines =
-  buildRowTemplateLines(table);
+  rowLines =
+    insertMeanLineIntoRows(
+      rowLines,
+      table
+    );
 
-rowLines =
-  insertMeanLineIntoRows(
-    rowLines,
-    table
-  );
-
-rowLines.forEach(line => {
-  block.push(line);
-});
-    }
+  rowLines.forEach(line => {
+    block.push(line);
+  });
+}
 
     blocks.push(block.join("\n"));
   });
@@ -5941,97 +6119,293 @@ function safeClearHTML(element) {
 }
 
 function clearInputFields() {
+  /*
+    Giữ lại trạng thái cuối cùng trước khi xóa form.
+  */
+  const lastSTState =
+    useSTCheckbox.checked;
+
+  const lastQuestionType =
+    getLastQuestionType();
+
   projectTypeSelect.value = "N2";
 
-  safeSetValue(questionCodeInput, "");
-  safeSetValue(questionTypeSelect, "");
-  safeSetValue(rowTypeSelect, "");
-  safeSetValue(questionTextInput, "");
+  /*
+    Reset các trường nhập chính.
+  */
+  safeSetValue(
+    questionCodeInput,
+    ""
+  );
 
-  populateRowTypeOptions(normalRowTypeOptions, "");
+  safeSetValue(
+    questionTypeSelect,
+    lastQuestionType
+  );
 
-  safeSetValue(answerOptionsInput, "");
-  safeSetChecked(useCustomNetGroupsCheckbox, false);
-  safeSetValue(customNetGroupsInput, "");
-  safeClearHTML(customDSPositiveSelect);
-  safeClearHTML(customDSNegativeSelect);
-  safeAddHidden(customDSBox);
-  toggleCustomNetGroupBox();
+  safeSetValue(
+    questionTextInput,
+    ""
+  );
 
-  safeSetChecked(useSTCheckbox, false);
-  safeSetChecked(useDSCheckbox, true);
-  safeSetValue(subtitleOnlyInput, "");
-  safeSetValue(manualUseIndexInput, "");
+  /*
+    Khôi phục Row Type phù hợp với
+    Question Type cuối cùng.
+  */
+  if (
+    lastQuestionType === "demographic"
+  ) {
+    populateRowTypeOptions(
+      demographicRowTypeOptions,
+      ""
+    );
+  } else if (
+    lastQuestionType === "single_choice"
+  ) {
+    populateRowTypeOptions(
+      normalRowTypeOptions,
+      "custom_code"
+    );
+
+    rowTypeSelect.value =
+      "custom_code";
+  } else {
+    populateRowTypeOptions(
+      normalRowTypeOptions,
+      ""
+    );
+  }
+
+  /*
+    Reset Answer Options và NET Groups.
+  */
+  safeSetValue(
+    answerOptionsInput,
+    ""
+  );
 
   safeSetChecked(
-  useMeanCheckbox,
-  false
-);
+    useCustomNetGroupsCheckbox,
+    false
+  );
 
-safeSetChecked(
-  useRankCheckbox,
-  false
-);
+  safeSetValue(
+    customNetGroupsInput,
+    ""
+  );
 
-toggleQuestionTypeUI();
+  safeClearHTML(
+    customDSPositiveSelect
+  );
 
-rankRLCodesInput.value = "";
+  safeClearHTML(
+    customDSNegativeSelect
+  );
 
-rankRLBox.classList.add("hidden");
+  safeAddHidden(
+    customDSBox
+  );
 
-safeSetValue(
-  meanCodeRangeInput,
-  ""
-);
+  toggleCustomNetGroupBox();
 
-safeAddHidden(
-  meanSetupBox
-);
+  /*
+    Giữ nguyên trạng thái ST cuối cùng.
 
-toggleMeanSetupUI();
+    Nếu Single Choice / Array + ST bật:
+    form tiếp tục ở chế độ Array.
 
-  safeSetValue(baseTypeSelect, "total_sample");
-  safeSetValue(askedBaseTextInput, "");
-  safeSetValue(arraySampleExtraRowsInput, "");
-  safeClearHTML(arraySampleTableContainer);
-  safeAddHidden(arraySampleModal);
+    Nếu ST tắt:
+    form tiếp tục ở chế độ Single Choice.
+  */
+  safeSetChecked(
+    useSTCheckbox,
+    lastSTState
+  );
 
-  safeSetValue(demographicAdditionalCodesInput, "");
+  safeSetChecked(
+    useDSCheckbox,
+    true
+  );
 
-  safeSetValue(listoutManualSectionsInput, "");
+  safeSetValue(
+    subtitleOnlyInput,
+    ""
+  );
 
-  safeSetChecked(includeVersionSectionCheckbox, true);
-  safeSetValue(versionExtraRowsInput, "");
+  safeSetValue(
+    manualUseIndexInput,
+    ""
+  );
 
-  safeSetChecked(includeModeSectionCheckbox, true);
-  safeSetValue(modeExtraRowsInput, "");
+  /*
+    Reset MEAN.
+  */
+  safeSetChecked(
+    useMeanCheckbox,
+    false
+  );
 
-  safeSetChecked(includeDateSectionCheckbox, true);
-  safeSetValue(dateVariableInput, "submitdate");
-  safeSetValue(startDateInput, "");
-  safeSetValue(endDateInput, "");
+  safeSetValue(
+    meanCodeRangeInput,
+    ""
+  );
 
-  if (toggleVersionExtraBtn && versionExtraBox) {
-    closePlusSection(toggleVersionExtraBtn, versionExtraBox, "+ Add VERSION Extra Rows");
+  safeAddHidden(
+    meanSetupBox
+  );
+
+  /*
+    Reset Rank.
+  */
+  safeSetChecked(
+    useRankCheckbox,
+    false
+  );
+
+  safeSetValue(
+    rankRLCodesInput,
+    ""
+  );
+
+  safeAddHidden(
+    rankRLBox
+  );
+
+  /*
+    Reset Base.
+  */
+  safeSetValue(
+    askedBaseTextInput,
+    ""
+  );
+
+  /*
+    Reset Array Sample Setup.
+  */
+  pendingArraySampleSelections = [];
+
+  safeClearHTML(
+    arraySampleTableContainer
+  );
+
+  safeAddHidden(
+    arraySampleModal
+  );
+
+  /*
+    Reset Demographic.
+  */
+  safeSetValue(
+    demographicAdditionalCodesInput,
+    ""
+  );
+
+  /*
+    Reset Listout.
+  */
+  safeSetValue(
+    listoutManualSectionsInput,
+    ""
+  );
+
+  safeSetChecked(
+    includeVersionSectionCheckbox,
+    true
+  );
+
+  safeSetValue(
+    versionExtraRowsInput,
+    ""
+  );
+
+  safeSetChecked(
+    includeModeSectionCheckbox,
+    true
+  );
+
+  safeSetValue(
+    modeExtraRowsInput,
+    ""
+  );
+
+  safeSetChecked(
+    includeDateSectionCheckbox,
+    true
+  );
+
+  safeSetValue(
+    dateVariableInput,
+    "submitdate"
+  );
+
+  safeSetValue(
+    startDateInput,
+    ""
+  );
+
+  safeSetValue(
+    endDateInput,
+    ""
+  );
+
+  if (
+    toggleVersionExtraBtn &&
+    versionExtraBox
+  ) {
+    closePlusSection(
+      toggleVersionExtraBtn,
+      versionExtraBox,
+      "+ Add VERSION Extra Rows"
+    );
   }
 
-  if (toggleModeExtraBtn && modeExtraBox) {
-    closePlusSection(toggleModeExtraBtn, modeExtraBox, "+ Add MODE Extra Rows");
+  if (
+    toggleModeExtraBtn &&
+    modeExtraBox
+  ) {
+    closePlusSection(
+      toggleModeExtraBtn,
+      modeExtraBox,
+      "+ Add MODE Extra Rows"
+    );
   }
 
-  if (toggleDateSetupBtn && dateSetupBox) {
-    closePlusSection(toggleDateSetupBtn, dateSetupBox, "+ Add DATE Range");
+  if (
+    toggleDateSetupBtn &&
+    dateSetupBox
+  ) {
+    closePlusSection(
+      toggleDateSetupBtn,
+      dateSetupBox,
+      "+ Add DATE Range"
+    );
   }
 
-  safeSetValue(rankingMetricDefinitionsInput, "");
-  safeSetValue(rankingItemsInput, "");
-  safeSetChecked(useSplitABCheckbox, false);
+  /*
+    Reset Ranking Table.
+  */
+  safeSetValue(
+    rankingMetricDefinitionsInput,
+    ""
+  );
+
+  safeSetValue(
+    rankingItemsInput,
+    ""
+  );
+
+  safeSetChecked(
+    useSplitABCheckbox,
+    false
+  );
 
   if (splitRowsContainer) {
     resetSplitRows();
   }
 
-  safeClearHTML(rankingSplitTableContainer);
+  safeClearHTML(
+    rankingSplitTableContainer
+  );
 
   if (rankingSplitModal) {
     closeRankingSplitModal();
@@ -6039,21 +6413,42 @@ toggleMeanSetupUI();
 
   toggleSplitABBox();
 
-  safeSetValue(summaryRawInput, "");
-  safeSetValue(summaryBlockCountInput, "");
-  safeClearHTML(summaryBlockSetupContainer);
+  /*
+    Reset Summary Table.
+  */
+  safeSetValue(
+    summaryRawInput,
+    ""
+  );
+
+  safeSetValue(
+    summaryBlockCountInput,
+    ""
+  );
+
+  safeClearHTML(
+    summaryBlockSetupContainer
+  );
 
   if (openSummaryModalBtn) {
-    openSummaryModalBtn.classList.add("hidden");
+    openSummaryModalBtn.classList.add(
+      "hidden"
+    );
   }
 
   if (summaryModal) {
     closeSummaryModal();
   }
 
+  /*
+    Cập nhật giao diện một lần sau khi
+    toàn bộ dữ liệu đã được reset.
+  */
   toggleQuestionTypeUI();
   toggleAnswerOptionsBox();
   toggleUseDSBox();
+  toggleMeanSetupUI();
+  toggleRankRLBox();
   toggleSubtitleBox();
   toggleAskedBaseBox();
 }
@@ -6072,103 +6467,196 @@ function clearAll() {
 }
 
 function toggleSubtitleBox() {
+  const isArray =
+    isQuestionCodeRange(
+      questionCodeInput.value
+    ) &&
+    questionTypeSelect.value ===
+      "single_choice";
+
+  /*
+    Array luôn có ST.
+  */
+  if (isArray) {
+    useSTCheckbox.checked = true;
+
+    subtitleBox.classList.remove(
+      "hidden"
+    );
+
+    return;
+  }
+
+  /*
+    Single Choice vẫn có thể bật ST thủ công
+    nếu cần subtitle.
+  */
   if (useSTCheckbox.checked) {
-    subtitleBox.classList.remove("hidden");
+    subtitleBox.classList.remove(
+      "hidden"
+    );
   } else {
-    subtitleBox.classList.add("hidden");
+    subtitleBox.classList.add(
+      "hidden"
+    );
   }
 }
 
 function toggleAskedBaseBox() {
-  const isAskedBase = baseTypeSelect.value === "asked_base";
-  const isArray = questionTypeSelect.value === "array";
+  /*
+    Asked Base Label luôn hiện.
+  */
+  askedBaseBox.classList.remove(
+    "hidden"
+  );
 
-  if (!isAskedBase) {
-    askedBaseBox.classList.add("hidden");
-    askedBaseTextBox.classList.remove("hidden");
-    arraySampleSetupBox.classList.add("hidden");
-    return;
-  }
+  askedBaseTextBox.classList.remove(
+    "hidden"
+  );
 
-  askedBaseBox.classList.remove("hidden");
+  /*
+    Array được nhận biết bằng Question Code range.
+  */
+  const isArray =
+    isQuestionCodeRange(
+      questionCodeInput.value
+    ) &&
+    questionTypeSelect.value ===
+      "single_choice";
 
   if (isArray) {
-    askedBaseTextBox.classList.add("hidden");
-    arraySampleSetupBox.classList.remove("hidden");
-
-    if (useArraySampleSetupCheckbox) {
-      useArraySampleSetupCheckbox.checked = true;
-    }
+    arraySampleSetupBox.classList.remove(
+      "hidden"
+    );
   } else {
-    askedBaseTextBox.classList.remove("hidden");
-    arraySampleSetupBox.classList.add("hidden");
+    arraySampleSetupBox.classList.add(
+      "hidden"
+    );
   }
 }
 
 function parseArraySampleLabels(text) {
   return String(text || "")
-    .split("\n")
+    .replace(/\r\n?/g, "\n")
+    .split(/\n|,/)
     .map(line => line.trim())
     .filter(line => line !== "");
 }
 
 function getArraySampleDefinitions() {
-  const samples = [
-    { name: "SAMPLE A" },
-    { name: "SAMPLE B" }
+  const sampleNames = [
+    "SAMPLE A",
+    "SAMPLE B"
   ];
 
-  const extraLabels = parseArraySampleLabels(arraySampleExtraRowsInput.value);
+  /*
+    Asked Base giờ cũng là nơi nhập
+    thêm Sample Labels cho Array.
+  */
+  const extraLabels =
+    parseArraySampleLabels(
+      askedBaseTextInput.value
+    );
 
   extraLabels.forEach(label => {
-    samples.push({
-      name: label.toUpperCase()
-    });
+    const normalized =
+      label.toUpperCase();
+
+    if (
+      normalized &&
+      !sampleNames.includes(normalized)
+    ) {
+      sampleNames.push(normalized);
+    }
   });
 
-  return samples;
+  return sampleNames.map(name => {
+    return {
+      name
+    };
+  });
 }
 
 function buildArraySampleSetup() {
-  const questionCodes = expandQuestionCodes(questionCodeInput.value.trim());
+  const questionCodes = expandQuestionCodes(
+    questionCodeInput.value.trim()
+  );
 
   if (questionCodes.length === 0) {
-    alert("Please enter Question Code range first. Example: Q1:5");
+    alert(
+      "Please enter Question Code range first. Example: Q1:5"
+    );
     return;
   }
 
-  if (questionTypeSelect.value !== "array") {
-    alert("Array Sample Setup chỉ dùng cho Question Type = Array.");
+   if (
+    questionTypeSelect.value !== "single_choice" ||
+    questionCodes.length <= 1
+  ) {
+    alert(
+      "Array Sample Setup is only available for a Question Code range. Example: Q1:5"
+    );
     return;
   }
+  /*
+    Giữ lại lựa chọn đang có trong modal
+    trước khi build lại.
+  */
+  const currentSelections =
+    getArraySampleSelections();
 
-  if (baseTypeSelect.value !== "asked_base") {
-    alert("Please choose Base Type = Asked Base first.");
-    return;
+  if (currentSelections.length > 0) {
+    pendingArraySampleSelections =
+      currentSelections;
   }
 
-  const sampleDefs = getArraySampleDefinitions();
+  const sampleDefs =
+    getArraySampleDefinitions();
 
-  const subtitleLines = getSubtitleLines();
+  const subtitleLines =
+    getSubtitleLines();
 
-  const rows = questionCodes.map((code, index) => {
-    const options = sampleDefs.map(sample => {
-      return `<option value="${sample.name}">${sample.name}</option>`;
-    }).join("");
+  const rows = questionCodes
+    .map((code, index) => {
+      const savedSampleName =
+        pendingArraySampleSelections[index]
+          ?.sampleName || "";
 
-    return `
-      <tr>
-        <td>${code}</td>
-        <td>${subtitleLines[index] || code}</td>
-        <td>
-          <select class="array-sample-select" data-index="${index}">
-            <option value="">Blank</option>
-            ${options}
-          </select>
-        </td>
-      </tr>
-    `;
-  }).join("");
+      const options = sampleDefs
+        .map(sample => {
+          const selected =
+            sample.name === savedSampleName
+              ? "selected"
+              : "";
+
+          return `
+            <option
+              value="${sample.name}"
+              ${selected}
+            >
+              ${sample.name}
+            </option>
+          `;
+        })
+        .join("");
+
+      return `
+        <tr>
+          <td>${code}</td>
+          <td>${subtitleLines[index] || code}</td>
+          <td>
+            <select
+              class="array-sample-select"
+              data-index="${index}"
+            >
+              <option value="">Blank</option>
+              ${options}
+            </select>
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
 
   arraySampleTableContainer.innerHTML = `
     <table class="array-sample-table">
@@ -6179,13 +6667,16 @@ function buildArraySampleSetup() {
           <th>Sample Name</th>
         </tr>
       </thead>
+
       <tbody>
         ${rows}
       </tbody>
     </table>
   `;
 
-  arraySampleModal.classList.remove("hidden");
+  arraySampleModal.classList.remove(
+    "hidden"
+  );
 }
 
 function getArraySampleSelections() {
@@ -6500,6 +6991,57 @@ buildRankingSplitBtn.addEventListener("click", buildRankingSplitSetup);
 closeRankingSplitModalBtn.addEventListener("click", closeRankingSplitModal);
 saveRankingSplitModalBtn.addEventListener("click", closeRankingSplitModal);
 
+questionCodeInput.addEventListener(
+  "input",
+  function () {
+    const isArray =
+      questionTypeSelect.value ===
+        "single_choice" &&
+      isQuestionCodeRange(
+        questionCodeInput.value
+      );
+
+    /*
+      Range => Array.
+      ST được bật tự động.
+    */
+    if (isArray) {
+      useSTCheckbox.checked = true;
+      autoSTFromArray = true;
+    } else {
+      /*
+        Nếu ST trước đó được bật tự động
+        vì Array, khi quay về Single Choice
+        thì tự tắt nó.
+
+        Không tắt ST nếu user đã tự bật bằng tay.
+      */
+      if (autoSTFromArray) {
+        useSTCheckbox.checked = false;
+        autoSTFromArray = false;
+      }
+
+      /*
+        Xóa state Array cũ.
+      */
+      pendingArraySampleSelections = [];
+
+      safeClearHTML(
+        arraySampleTableContainer
+      );
+
+      safeAddHidden(
+        arraySampleModal
+      );
+    }
+
+    toggleSubtitleBox();
+    toggleAskedBaseBox();
+    toggleAnswerOptionsBox();
+    toggleUseDSBox();
+  }
+);
+
 subtitleOnlyInput.addEventListener(
   "blur",
   function () {
@@ -6560,6 +7102,7 @@ rowTypeSelect.addEventListener(
   }
 );
 
+
 function setDefaultRowTypeByQuestionType() {
   const questionType =
     questionTypeSelect.value;
@@ -6568,8 +7111,7 @@ function setDefaultRowTypeByQuestionType() {
     Single Choice và Array mặc định dùng CUSTOM CODE.
   */
   if (
-    questionType === "single_choice" ||
-    questionType === "array"
+    questionType === "single_choice"
   ) {
     populateRowTypeOptions(
       normalRowTypeOptions,
@@ -6593,6 +7135,11 @@ function setDefaultRowTypeByQuestionType() {
 questionTypeSelect.addEventListener(
   "change",
   function () {
+
+      localStorage.setItem(
+      LAST_QUESTION_TYPE_KEY,
+      questionTypeSelect.value
+    );
     /*
       Ranking Table mặc định bật Rank.
       User vẫn có thể bỏ tick sau đó.
@@ -6617,8 +7164,6 @@ questionTypeSelect.addEventListener(
  if (
   questionTypeSelect.value ===
     "single_choice" ||
-  questionTypeSelect.value ===
-    "array" ||
   questionTypeSelect.value === ""
 ) {
   setDefaultRowTypeByQuestionType();
@@ -6638,23 +7183,36 @@ questionTypeSelect.addEventListener(
     toggleQuestionTypeUI();
 
 if (
-  questionTypeSelect.value === "single_choice" ||
-  questionTypeSelect.value === "array"
+  questionTypeSelect.value ===
+  "single_choice"
 ) {
-  rowTypeSelect.value = "custom_code";
+  rowTypeSelect.value =
+    "custom_code";
 }
 
+toggleQuestionTypeUI();
 toggleAnswerOptionsBox();
 toggleUseDSBox();
 toggleAskedBaseBox();
+toggleSubtitleBox();
   }
 );
 
-useSTCheckbox.addEventListener("change", toggleSubtitleBox);
+useSTCheckbox.addEventListener(
+  "change",
+  function () {
+    /*
+      User tự click ST thì từ đây
+      không còn coi nó là ST auto từ Array.
+    */
+    autoSTFromArray = false;
 
-baseTypeSelect.addEventListener("change", function () {
-  toggleAskedBaseBox();
-});
+    toggleSubtitleBox();
+    toggleAskedBaseBox();
+    toggleAnswerOptionsBox();
+    toggleUseDSBox();
+  }
+);
 
 
 questionTextInput.addEventListener(
@@ -6785,9 +7343,35 @@ closeArraySampleModalBtn.addEventListener("click", function () {
   arraySampleModal.classList.add("hidden");
 });
 
-saveArraySampleModalBtn.addEventListener("click", function () {
-  arraySampleModal.classList.add("hidden");
-});
+saveArraySampleModalBtn.addEventListener(
+  "click",
+  function () {
+    const selections =
+      getArraySampleSelections();
+
+    const questionCodes =
+      expandQuestionCodes(
+        questionCodeInput.value.trim()
+      );
+
+    if (
+      selections.length !==
+      questionCodes.length
+    ) {
+      alert(
+        "Array Sample Setup is incomplete. Please build the setup again."
+      );
+      return;
+    }
+
+    pendingArraySampleSelections =
+      selections;
+
+    arraySampleModal.classList.add(
+      "hidden"
+    );
+  }
+);
 
 arraySampleModal.addEventListener("click", function (event) {
   if (event.target === arraySampleModal) {
@@ -7215,4 +7799,18 @@ function initSortable() {
 
   });
 
+}
+
+const LAST_QUESTION_TYPE_KEY =
+  "crosstab_last_question_type";
+
+function getLastQuestionType() {
+  const value =
+    localStorage.getItem(
+      LAST_QUESTION_TYPE_KEY
+    );
+
+  return ALL_QUESTION_TYPES.has(value)
+    ? value
+    : "";
 }

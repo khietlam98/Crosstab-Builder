@@ -116,7 +116,7 @@
     </option>
 
     <option value="single_choice">
-      Single Choice
+      Single Choice / Array
     </option>
 
     <option value="multiple_choice">
@@ -130,11 +130,7 @@
     <option value="ranking_table">
       Ranking Table
     </option>
-
-    <option value="array">
-      Array
-    </option>
-
+    
     <option value="demographic">
       Demographic
     </option>
@@ -313,7 +309,7 @@
         role="tooltip"
       >
         <strong>
-          QUESTION TEXT / SUMMARY TITLE
+          TABLE TITLE
         </strong>
 
         <span>
@@ -434,7 +430,7 @@
           role="tooltip"
         >
           <strong>
-            ACTIVE TOTAL / NET GROUPS
+            ACTIVE NET 
           </strong>
 
           <span>
@@ -828,71 +824,21 @@
   </div>
 </div>
 
-        <div class="form-group">
-  <div class="field-label-row">
-    <label for="baseType">
-      Base Type
-    </label>
-
-    <button
-      type="button"
-      class="help-tooltip"
-      aria-label="Help for Base Type"
-      aria-haspopup="true"
-    >
-      ?
-
-      <span
-        class="help-tooltip-box"
-        role="tooltip"
-      >
-        <strong>BASE TYPE</strong>
-
-        <span class="help-section-title">
-          BASE / TOTAL SAMPLE
-        </span>
-
-        <span>
-          Uses the all ask sample as the base.
-        </span>
-
-        <span class="help-section-title">
-          ASKED BASE
-        </span>
-
-        <span>
-          Uses only for specific group of respondents.
-        </span>
-
-      </span>
-    </button>
-  </div>
-
-  <select id="baseType">
-    <option value="total_sample">
-      Base / Total Sample
-    </option>
-
-    <option value="asked_base">
-      Asked Base
-    </option>
-  </select>
-</div>
-
-<div
+       <div
   id="askedBaseBox"
-  class="form-group hidden"
+  class="form-group"
 >
   <div id="askedBaseTextBox">
+
     <div class="field-label-row">
       <label for="askedBaseText">
-        Asked Base Text
+        Asked Base
       </label>
 
       <button
         type="button"
         class="help-tooltip"
-        aria-label="Help for Asked Base Text"
+        aria-label="Help for Asked Base Label"
         aria-haspopup="true"
       >
         ?
@@ -901,10 +847,10 @@
           class="help-tooltip-box"
           role="tooltip"
         >
-          <strong>ASKED BASE TEXT</strong>
+          <strong>ASKED BASE</strong>
 
           <span>
-            Enter the base description that should appear in the table.
+            Leave this field blank to use TOTAL SAMPLE.
           </span>
 
           <span class="help-section-title">
@@ -912,11 +858,11 @@
           </span>
 
           <span>
-            <code>SAMPLE A</code>
+            <code>ASKED CITY OF CRAIG ONLY</code>
           </span>
 
           <span>
-            <code>ASKED IF Q4=1</code>
+            <code>SAMPLE A</code>
           </span>
 
           <span class="help-section-title">
@@ -924,7 +870,7 @@
           </span>
 
           <span>
-            Use wording that clearly identifies the respondents included in the asked base.
+            If a label is entered, the table will automatically use it as the Asked Base.
           </span>
         </span>
       </button>
@@ -933,29 +879,27 @@
     <input
       id="askedBaseText"
       type="text"
-      placeholder="Example: SAMPLE A"
+      placeholder="Leave blank for TOTAL SAMPLE"
     />
+
   </div>
 
-  <div id="arraySampleSetupBox" class="array-sample-box hidden">
+  <div
+    id="arraySampleSetupBox"
+    class="array-sample-box hidden"
+  >
     <hr>
 
-    <div class="checkbox-row">
-      <input id="useArraySampleSetup" type="checkbox" checked />
-      <label for="useArraySampleSetup">Use Array Sample Setup</label>
-    </div>
-
-    <label for="arraySampleExtraRows">Additional Sample Labels</label>
-    <textarea id="arraySampleExtraRows" placeholder="Optional. Example:
-SAMPLE C
-SAMPLE D
-SAMPLE E"></textarea>
-
     <small>
-      SAMPLE A and SAMPLE B are included by default. To add more samples, simply input the sample name
+      SAMPLE A and SAMPLE B are included by default.
+      To add more samples, simply input the sample name.
     </small>
 
-    <button id="buildArraySampleBtn" type="button" class="secondary">
+    <button
+      id="buildArraySampleBtn"
+      type="button"
+      class="secondary"
+    >
       Build Array Sample Setup
     </button>
   </div>
