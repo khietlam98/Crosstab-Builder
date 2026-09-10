@@ -195,26 +195,7 @@ button.danger {
   margin: 0;
 }
 
-/* =========================
-   OUTPUT SYNTAX
-========================= */
 
-.output-card pre {
-  width: 100%;
-  min-width: 0;
-  flex: 1;
-  overflow: auto;
-  white-space: pre;
-
-  background: #fffef0;
-  border: 1px solid #ccc;
-  border-radius: 10px;
-  padding: 14px;
-
-  font-family: Consolas, "Courier New", monospace;
-  font-size: 14px;
-  line-height: 1.35;
-}
 
 /* =========================
    INPUT LIST
@@ -566,11 +547,7 @@ button.danger {
   flex-direction: column;
 }
 
-.output-card pre {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-}
+
 
 /* ===== CUSTOM CODE NET GROUP / D/S ===== */
 
@@ -966,4 +943,59 @@ right: auto;
 
 .drag-handle:active {
     cursor: grabbing;
+}
+
+/* =========================
+   OUTPUT SYNTAX EDITOR
+========================= */
+
+.output-card {
+  position: relative;
+  z-index: 1;
+
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#output {
+  width: 100%;
+  min-width: 0;
+  flex: 1;
+  min-height: 0;
+
+  box-sizing: border-box;
+
+  overflow: auto;
+
+  /* Keep syntax formatting */
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
+
+  /* Original output style */
+  background: #fffef0;
+  color: #111;
+
+  border: 1px solid #ccc;
+  border-radius: 10px;
+
+  padding: 14px;
+
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 14px;
+  line-height: 1.35;
+
+  resize: none;
+
+  outline: none;
+}
+
+#output:focus {
+  border-color: #aaa;
+  outline: none;
+}
+
+#output {
+  cursor: text;
 }

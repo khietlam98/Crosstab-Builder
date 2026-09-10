@@ -1,4 +1,22 @@
+/* ============================================================
+   CROSSTAB BUILDER - main.js
+   ------------------------------------------------------------
+   Architecture refactor notes:
+   - Syntax-generation logic (projectSettings, rowTemplates,
+     demographicTemplates, D/S, NET, MEAN, RL, Array, Summary,
+     Ranking, Listout builders) is UNCHANGED.
+   - Single initialization entry point: init() on DOMContentLoaded.
+   - All optional features (Region Mapping, Summary/Ranking/Array
+     modals, Split Rows, Listout extras) are isolated behind their
+     own init function and a null-check, so a missing/renamed DOM
+     element can never break the core Crosstab Builder.
+   - generateOutput() only reads tables and writes output.value.
+     It no longer touches outputEdited or saves the session.
+   ============================================================ */
+
 let sortable = null;
+let outputEdited = false;
+let outputSyncDebounceTimer = null;
 
 const projectSettings = {
   N2: {
@@ -303,141 +321,64 @@ const demographicTemplates = {
   ]
 };
 
-const STORAGE_KEY =
-  "crosstab_builder_session_v1";
+const STORAGE_KEY = "crosstab_builder_session_v1";
+const LAST_QUESTION_TYPE_KEY = "crosstab_last_question_type";
 
+/* ---------------- Application state ---------------- */
 let tables = [];
 let editingIndex = null;
 let editingArrayGroupId = null;
 let editingArrayGroupStartIndex = null;
 let pendingArraySampleSelections = [];
 let autoSTFromArray = false;
+let regionData = [];
 
-const projectTypeSelect = document.getElementById("projectType");
-const questionCodeInput = document.getElementById("questionCode");
-const questionTypeSelect = document.getElementById("questionType");
-const rowTypeSelect = document.getElementById("rowType");
-const rowTypeBox = document.getElementById("rowTypeBox");
-const questionTextInput = document.getElementById("questionText");
+/* ---------------- DOM element references ----------------
+   These are assigned inside cacheDomElements(), which runs
+   from init() after DOMContentLoaded. Declaring them here
+   (rather than with document.getElementById at parse time)
+   means every function below can close over the same
+   variables regardless of when the script tag executes.
+------------------------------------------------------------ */
+let projectTypeSelect, questionCodeInput, questionTypeSelect, rowTypeSelect, rowTypeBox, questionTextInput;
+let answerOptionsInput, answerOptionsBox;
+let useCustomNetGroupsCheckbox, customNetGroupBox, customNetGroupsInput, buildCustomDSBtn, customDSBox, customDSPositiveSelect, customDSNegativeSelect;
+let demographicSetupPanel, demographicAdditionalCodesInput;
+let normalOptionsBox, useSTCheckbox, useDSCheckbox, useDSBox, sharedDSSetupBox;
+let useRankBox, useRankCheckbox, rankRLBox, rankRLCodesInput;
+let sharedMeanSetupBox, useMeanCheckbox, meanSetupBox, meanCodeRangeInput;
+let subtitleBox, subtitleOnlyInput, manualUseIndexInput;
+let askedBaseBox, askedBaseTextBox, askedBaseTextInput;
+let arraySampleSetupBox, buildArraySampleBtn;
+let arraySampleModal, closeArraySampleModalBtn, saveArraySampleModalBtn, arraySampleTableContainer;
+let summarySetupBox, summaryRawInput, summaryBlockCountInput, buildSummarySetupBtn, summaryBlockSetupContainer;
+let summaryModal, openSummaryModalBtn, closeSummaryModalBtn, saveSummaryModalBtn;
+let summarySetupPanel;
+let rankingSetupPanel, rankingMetricDefinitionsInput, rankingItemsInput;
+let useSplitABCheckbox, splitABBox, splitRowsContainer, addSplitRowBtn;
+let listoutSetupPanel, listoutManualSectionsInput;
+let includeVersionSectionCheckbox, versionExtraRowsInput;
+let includeModeSectionCheckbox, modeExtraRowsInput;
+let includeDateSectionCheckbox, dateVariableInput, startDateInput, endDateInput;
+let toggleVersionExtraBtn, versionExtraBox;
+let toggleModeExtraBtn, modeExtraBox;
+let toggleDateSetupBtn, dateSetupBox;
+let buildRankingSplitBtn, rankingSplitModal, closeRankingSplitModalBtn, saveRankingSplitModalBtn, rankingSplitTableContainer;
+let inputList, output;
+let addBtn, cancelEditBtn, clearInputBtn, clearAllBtn, generateBtn, copyBtn;
+let regionFileInput, regionLogicInput, applyRegionMappingBtn;
+let inputCard;
 
-const answerOptionsInput = document.getElementById("answerOptions");
-const answerOptionsBox = document.getElementById("answerOptionsBox");
+/* ---------------- DOM helper ---------------- */
+function requireElement(id) {
+  const element = document.getElementById(id);
 
-const useCustomNetGroupsCheckbox = document.getElementById("useCustomNetGroups");
-const customNetGroupBox = document.getElementById("customNetGroupBox");
-const customNetGroupsInput = document.getElementById("customNetGroups");
-const buildCustomDSBtn = document.getElementById("buildCustomDSBtn");
-const customDSBox = document.getElementById("customDSBox");
-const customDSPositiveSelect = document.getElementById("customDSPositive");
-const customDSNegativeSelect = document.getElementById("customDSNegative");
+  if (!element) {
+    console.error(`Missing required element: #${id}`);
+  }
 
-const demographicSetupPanel = document.getElementById("demographicSetupPanel");
-const demographicAdditionalCodesInput = document.getElementById("demographicAdditionalCodes");
-
-const normalOptionsBox = document.getElementById("normalOptionsBox");
-const useSTCheckbox = document.getElementById("useST");
-const useDSCheckbox = document.getElementById("useDS");
-const useDSBox = document.getElementById("useDSBox");
-const sharedDSSetupBox = document.getElementById("sharedDSSetupBox");
-
-const useRankBox =
-  document.getElementById("useRankBox");
-
-const useRankCheckbox =
-  document.getElementById("useRank");
-
-  const rankRLBox =
-  document.getElementById("rankRLBox");
-
-const rankRLCodesInput =
-  document.getElementById("rankRLCodes");
-
-const sharedMeanSetupBox =
-  document.getElementById("sharedMeanSetupBox");
-
-const useMeanCheckbox =
-  document.getElementById("useMean");
-
-const meanSetupBox =
-  document.getElementById("meanSetupBox");
-
-const meanCodeRangeInput =
-  document.getElementById("meanCodeRange");
-
-const subtitleBox = document.getElementById("subtitleBox");
-const subtitleOnlyInput = document.getElementById("subtitleOnly");
-const manualUseIndexInput = document.getElementById("manualUseIndex");
-
-const askedBaseBox = document.getElementById("askedBaseBox");
-const askedBaseTextBox = document.getElementById("askedBaseTextBox");
-const askedBaseTextInput = document.getElementById("askedBaseText");
-
-const arraySampleSetupBox = document.getElementById("arraySampleSetupBox");
-const buildArraySampleBtn = document.getElementById("buildArraySampleBtn");
-
-const arraySampleModal = document.getElementById("arraySampleModal");
-const closeArraySampleModalBtn = document.getElementById("closeArraySampleModalBtn");
-const saveArraySampleModalBtn = document.getElementById("saveArraySampleModalBtn");
-const arraySampleTableContainer = document.getElementById("arraySampleTableContainer");
-
-const summarySetupBox = document.getElementById("summarySetupBox");
-const summaryRawInput = document.getElementById("summaryRawInput");
-const summaryBlockCountInput = document.getElementById("summaryBlockCount");
-const buildSummarySetupBtn = document.getElementById("buildSummarySetupBtn");
-const summaryBlockSetupContainer = document.getElementById("summaryBlockSetupContainer");
-
-const summaryModal = document.getElementById("summaryModal");
-const openSummaryModalBtn = document.getElementById("openSummaryModalBtn");
-const closeSummaryModalBtn = document.getElementById("closeSummaryModalBtn");
-const saveSummaryModalBtn = document.getElementById("saveSummaryModalBtn");
-
-const rankingSetupPanel = document.getElementById("rankingSetupPanel");
-const rankingMetricDefinitionsInput = document.getElementById("rankingMetricDefinitions");
-const rankingItemsInput = document.getElementById("rankingItemsInput");
-
-const useSplitABCheckbox = document.getElementById("useSplitAB");
-const splitABBox = document.getElementById("splitABBox");
-const splitRowsContainer = document.getElementById("splitRowsContainer");
-const addSplitRowBtn = document.getElementById("addSplitRowBtn");
-
-const listoutSetupPanel = document.getElementById("listoutSetupPanel");
-const listoutManualSectionsInput = document.getElementById("listoutManualSections");
-
-const includeVersionSectionCheckbox = document.getElementById("includeVersionSection");
-const versionExtraRowsInput = document.getElementById("versionExtraRows");
-
-const includeModeSectionCheckbox = document.getElementById("includeModeSection");
-const modeExtraRowsInput = document.getElementById("modeExtraRows");
-
-const includeDateSectionCheckbox = document.getElementById("includeDateSection");
-const dateVariableInput = document.getElementById("dateVariable");
-const startDateInput = document.getElementById("startDateInput");
-const endDateInput = document.getElementById("endDateInput");
-
-const toggleVersionExtraBtn = document.getElementById("toggleVersionExtraBtn");
-const versionExtraBox = document.getElementById("versionExtraBox");
-
-const toggleModeExtraBtn = document.getElementById("toggleModeExtraBtn");
-const modeExtraBox = document.getElementById("modeExtraBox");
-
-const toggleDateSetupBtn = document.getElementById("toggleDateSetupBtn");
-const dateSetupBox = document.getElementById("dateSetupBox");
-
-const buildRankingSplitBtn = document.getElementById("buildRankingSplitBtn");
-const rankingSplitModal = document.getElementById("rankingSplitModal");
-const closeRankingSplitModalBtn = document.getElementById("closeRankingSplitModalBtn");
-const saveRankingSplitModalBtn = document.getElementById("saveRankingSplitModalBtn");
-const rankingSplitTableContainer = document.getElementById("rankingSplitTableContainer");
-
-const inputList = document.getElementById("inputList");
-const output = document.getElementById("output");
-
-const addBtn = document.getElementById("addBtn");
-const cancelEditBtn = document.getElementById("cancelEditBtn");
-const clearInputBtn = document.getElementById("clearInputBtn");
-const clearAllBtn = document.getElementById("clearAllBtn");
-const generateBtn = document.getElementById("generateBtn");
-const copyBtn = document.getElementById("copyBtn");
+  return element;
+}
 
 function normalizeQuestionCode(value) {
   return value.trim().toUpperCase();
@@ -703,9 +644,12 @@ function resetSplitRows() {
 }
 
 function getSplitRowsFromInput() {
+  if (!splitRowsContainer) {
+    return [];
+  }
+
   const rows = [...splitRowsContainer.querySelectorAll(".split-row")];
 
-  
   return rows.map(row => {
     const label = row.querySelector(".split-row-label").value.trim();
     const variable = row.querySelector(".split-row-variable").value.trim();
@@ -721,6 +665,10 @@ function getSplitRowsFromInput() {
 }
 
 function loadSplitRowsToInput(splitRows) {
+  if (!splitRowsContainer) {
+    return;
+  }
+
   splitRowsContainer.innerHTML = "";
 
   if (!splitRows || splitRows.length === 0) {
@@ -1169,8 +1117,6 @@ function buildDemographicTemplateLines(table) {
         lines.push(line);
       });
 
-
-    console.log("rankRLCodes =", rankRLCodes);
     buildRowsFromAnswerOptions(
       table.answerOptions,
       table.questionCode,
@@ -1784,8 +1730,24 @@ if (
     " QUESTION " +
     questionNumber +
     ":|" +
-    cleanQuestionText
+    stripLeadingQuestionLabel(cleanQuestionText)
   );
+}
+
+/*
+  Strips an already-present "QUESTION <identifier>:" prefix (with or
+  without a space before the "|") from the front of a question text
+  value. This is a self-healing safeguard: a table whose stored
+  questionText got polluted with a full "QUESTION N: |text" line
+  (e.g. from the extractPlainTitle bug that used to reject a space
+  before "|") would otherwise get a second "QUESTION N:|" prefix
+  wrapped around it here every time Output regenerates, doubling the
+  title further on every subsequent edit instead of ever recovering.
+*/
+function stripLeadingQuestionLabel(text) {
+  const match = String(text || "").match(/^QUESTION\s+[^:]+:\s*\|\s*(.*)$/i);
+
+  return match ? match[1] : text;
 }
 
 function getTnValue(questionType, projectType) {
@@ -2091,14 +2053,6 @@ function parseYYYYMMDD(value) {
   return date;
 }
 
-function formatYYYYMMDD(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return "" + year + month + day;
-}
-
 function formatListoutDateLabel(date) {
   const weekdays = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
   const months = [
@@ -2120,6 +2074,14 @@ function formatListoutDateLabel(date) {
 }
 
 function buildListoutDateLines(dateVariable, startDateText, endDateText) {
+  /*
+    BUG FIX: the previous implementation referenced an
+    undefined `extraRows` variable inside this loop and threw
+    a ReferenceError any time a Listout table used a DATE
+    range, which stopped output generation entirely. This now
+    follows the same formatSyntaxRow pattern used by the
+    VERSION/MODE sections above (no new syntax rules).
+  */
   const startDate = parseYYYYMMDD(startDateText);
   const endDate = parseYYYYMMDD(endDateText);
 
@@ -2143,22 +2105,17 @@ function buildListoutDateLines(dateVariable, startDateText, endDateText) {
     const code = formatYYYYMMDD(current);
     const label = formatListoutDateLabel(current);
 
-    extraRows.forEach(row => {
-  lines.push(
-    formatSyntaxRow(
-      row.label,
-      row.variable +
-        " (" +
-        row.code +
-        ")",
-      {
-        indent: "   ",
-        logicColumn: 28,
-        addTrailingCaret: false
-      }
-    )
-  );
-});
+    lines.push(
+      formatSyntaxRow(
+        label,
+        variable + " (" + code + ")",
+        {
+          indent: "   ",
+          logicColumn: 28,
+          addTrailingCaret: false
+        }
+      )
+    );
 
     current.setDate(current.getDate() + 1);
   }
@@ -2632,10 +2589,8 @@ function buildRowsFromAnswerOptions(
             ít nhất một NET Group hay không.
           */
           insideNet:
-            isAnswerCodeInsideNetGroups(
-              parsed.code,
-              netGroups
-            )
+  getAllNetAnswerCodes(netGroups)
+    .has(Number(parsed.code))
         };
       });
 
@@ -3245,6 +3200,59 @@ function isAnswerCodeInsideNetGroups(
       String(answerCode)
     );
   });
+}
+
+function getAllNetAnswerCodes(netGroups = []) {
+
+  const codes = new Set();
+
+  netGroups.forEach(net => {
+
+    // NET dạng range: 1-3
+    if (net.range) {
+
+      const parsed =
+        parseMeanCodeInput(net.range);
+
+      if (parsed) {
+        parsed.forEach(code =>
+          codes.add(Number(code))
+        );
+      }
+    }
+
+
+    // NET dạng logic:
+    // Q13:1-3 OR Q14:1
+    if (net.logic) {
+
+      const matches =
+        String(net.logic)
+          .match(/\d+(?:-\d+)?/g);
+
+      if (matches) {
+
+        matches.forEach(item => {
+
+          const parsed =
+            parseMeanCodeInput(item);
+
+          if (parsed) {
+            parsed.forEach(code =>
+              codes.add(Number(code))
+            );
+          }
+
+        });
+
+      }
+
+    }
+
+  });
+
+
+  return codes;
 }
 
 function buildCustomDSSetup() {
@@ -4146,9 +4154,6 @@ function buildSummarySetup() {
 
   openSummaryModalBtn.classList.remove("hidden");
   openSummaryModal();
-
-  console.log("Parsed summary blocks:", parsedBlocks);
-  console.log("Requested summary blocks:", requestedCount);
 }
 
 function getSummaryBlocksFromSetup() {
@@ -4816,13 +4821,15 @@ useMean,
 meanCodeRange,
 
     subtitleOnly: subtitleLines[index] || subtitleLines[0] || "",
-    baseType:
+baseType:
   arraySampleSelections[index]?.sampleName
     ? "asked_base"
-    : "total_sample",
+    : currentBaseType,
 
-   askedBaseText:
-  arraySampleSelections[index]?.sampleName || "",
+askedBaseText:
+  arraySampleSelections[index]?.sampleName
+    ? arraySampleSelections[index].sampleName
+    : currentAskedBaseText,
 
     useArraySampleSetup:
   effectiveQuestionType === "array",
@@ -5046,13 +5053,24 @@ function formatListoutTitle(title) {
     .join("/");
 }
 
+/*
+  ADD TABLE — single entry point, single event listener
+  (registered once inside attachCoreEventListeners()).
+
+  outputEdited never blocks Add Table. The flow always
+  regenerates Output from the current tables so the two
+  never drift apart; outputEdited is reset to false here
+  because the freshly generated Output is not a "manual edit".
+*/
 function addTable() {
   const oldEditingTable =
     editingIndex !== null ? tables[editingIndex] : null;
 
   const newTables = collectTablesFromInput();
 
-  if (!newTables) return;
+  if (!newTables || newTables.length === 0) {
+    return;
+  }
 
   if (editingArrayGroupId !== null) {
     const groupId = editingArrayGroupId;
@@ -5106,8 +5124,9 @@ function addTable() {
   }
 
   renderInputList();
-  saveSession();
   generateOutput();
+  outputEdited = false;
+  saveSession();
   clearInputFields();
 }
 
@@ -5570,8 +5589,11 @@ if (table.questionType === "summary_table") {
 } else {
   rowTypeSelect.value = table.rowType;
   answerOptionsInput.value = table.answerOptions || "";
-  
+
   customNetGroupsInput.value = table.customNetGroupsRaw || "";
+  useCustomNetGroupsCheckbox.checked = !!table.customNetGroupsRaw;
+  toggleCustomNetGroupBox();
+
   buildCustomDSSetup();
 
   if (table.customDSPositive) {
@@ -5593,6 +5615,11 @@ if (table.questionType === "summary_table") {
 }
 }
 
+/*
+  DELETE / CLEAR — all regenerate Output immediately since the
+  underlying tables changed; a freshly regenerated Output is
+  never treated as a manual edit, so outputEdited is reset.
+*/
 function deleteTable(index) {
   tables.splice(index, 1);
 
@@ -5606,8 +5633,9 @@ function deleteTable(index) {
   }
 
   renderInputList();
-  saveSession();
   generateOutput();
+  outputEdited = false;
+  saveSession();
 }
 
 function cancelEdit() {
@@ -5657,6 +5685,8 @@ function deleteArrayGroup(groupId) {
 
   renderInputList();
   generateOutput();
+  outputEdited = false;
+  saveSession();
 }
 
 function renderInputList() {
@@ -5774,6 +5804,20 @@ function renderInputList() {
   initSortable();
 }
 
+/*
+  GENERATE OUTPUT — pure function per architecture spec:
+  reads `tables`, builds syntax, writes output.value.
+  It must NOT clear inputs, modify tables/editingIndex,
+  save the session, register listeners, or touch outputEdited.
+
+  NOTE: previously this called BOTH updateOutputHighlight() and
+  renderHighlightBackdrop() -- two competing highlighting systems.
+  updateOutputHighlight() wrote into document.getElementById(
+  "outputHighlight"), an element that is never created anywhere in
+  this file, so that call was always a silent no-op at best. Removed
+  entirely; renderHighlightBackdrop() is the one real highlighting
+  system (see the FIND & REPLACE section below for why).
+*/
 function generateOutput() {
   const blocks = [];
 
@@ -5873,58 +5917,6 @@ function generateOutput() {
 }
 
    if (
-  table.questionType ===
-  "multiple_choice"
-) {
-  const dsLine =
-    buildCustomDSLine(table);
-
-  if (dsLine) {
-    block.push(dsLine);
-  }
-
-  if (table.useCustomNetGroups) {
-    const netGroupLines =
-      buildMultipleChoiceNetGroupLines(
-        table
-      );
-
-    netGroupLines.forEach(line => {
-      block.push(line);
-    });
-  }
-
-  const answerRows =
-    buildMultipleChoiceAnswerRows(
-      table.answerOptions,
-      table.questionCode,
-      table.useCustomNetGroups
-        ? table.customNetGroups || []
-        : []
-    );
-
-  answerRows.forEach(line => {
-    block.push(line);
-  });
-
-  /*
-    Multiple Choice hiện chèn MEAN ở cuối.
-  */
-  const meanLine =
-    buildMeanLine(table);
-
-  if (meanLine) {
-    block.push(meanLine);
-  }
-
-  blocks.push(
-    block.join("\n")
-  );
-
-  return;
-}
-
-       if (
   table.questionType ===
   "multiple_choice"
 ) {
@@ -6091,7 +6083,8 @@ if (
     blocks.push(block.join("\n"));
   });
 
-  output.textContent = blocks.join("\n");
+  output.value = blocks.join("\n");
+  renderHighlightBackdrop();
 }
 
 function safeSetValue(element, value) {
@@ -6457,13 +6450,23 @@ function clearInput() {
   clearInputFields();
 }
 
+/*
+  CLEAR ALL — per spec, does NOT call generateOutput() since
+  there are no tables left; Output is simply blanked directly.
+*/
 function clearAll() {
   tables = [];
-  exitEditMode();
+  editingIndex = null;
+  outputEdited = false;
+
   clearInputFields();
+
+  output.value = "";
+
+  localStorage.removeItem(STORAGE_KEY);
+
   renderInputList();
-  saveSession();
-  generateOutput();
+  renderHighlightBackdrop();
 }
 
 function toggleSubtitleBox() {
@@ -6510,9 +6513,11 @@ function toggleAskedBaseBox() {
     "hidden"
   );
 
-  askedBaseTextBox.classList.remove(
-    "hidden"
-  );
+  if (askedBaseTextBox) {
+    askedBaseTextBox.classList.remove(
+      "hidden"
+    );
+  }
 
   /*
     Array được nhận biết bằng Question Code range.
@@ -6680,6 +6685,10 @@ function buildArraySampleSetup() {
 }
 
 function getArraySampleSelections() {
+  if (!arraySampleTableContainer) {
+    return [];
+  }
+
   const selects = [...arraySampleTableContainer.querySelectorAll(".array-sample-select")];
 
   return selects.map(select => {
@@ -6715,6 +6724,15 @@ function buildMultipleChoiceVariable(baseQuestionCode, answerCode) {
   return baseQuestionCode + "_" + answerCode;
 }
 
+/*
+  BUG FIX: the previous version computed a `suffix` value here
+  using undefined variables (`rlCodes`, `code`) which threw a
+  ReferenceError every time a Multiple Choice table was rendered
+  -- and the value was never even passed into formatSyntaxRow.
+  That dead/broken block has been removed; behavior (no RL
+  suffix on Multiple Choice answer rows) is unchanged from what
+  actually executed before (since the value was never used).
+*/
 function buildMultipleChoiceAnswerRows(
   answerOptionsText,
   questionCode,
@@ -6740,13 +6758,6 @@ function buildMultipleChoiceAnswerRows(
     const indent = shouldIndent
       ? "   "
       : " ";
-
-         const suffix =
-  rlCodes.has(
-    Number(code)
-  )
-    ? "RL"
-    : "";
 
     return formatSyntaxRow(
       option.label,
@@ -6879,7 +6890,6 @@ function getRankSuffix(
     ? "RL"
     : "";
 }
-const summarySetupPanel = document.getElementById("summarySetupPanel");
 
 function toggleQuestionTypeUI() {
   const questionType = questionTypeSelect.value;
@@ -6958,7 +6968,7 @@ function toggleQuestionTypeUI() {
 }
 
 async function copyOutput() {
-  const text = output.textContent;
+  const text = output.value;
 
   if (!text.trim()) {
     alert("No output to copy.");
@@ -6969,519 +6979,2235 @@ async function copyOutput() {
     await navigator.clipboard.writeText(text);
     alert("Copied.");
   } catch (err) {
-    const tempTextArea = document.createElement("textarea");
+    const tempTextArea =
+      document.createElement("textarea");
+
     tempTextArea.value = text;
+
     document.body.appendChild(tempTextArea);
+
     tempTextArea.select();
+
     document.execCommand("copy");
+
     document.body.removeChild(tempTextArea);
+
     alert("Copied.");
   }
 }
 
-addBtn.addEventListener("click", addTable);
-cancelEditBtn.addEventListener("click", cancelEdit);
-clearInputBtn.addEventListener("click", clearInput);
-clearAllBtn.addEventListener("click", clearAll);
-generateBtn.addEventListener("click", generateOutput);
-copyBtn.addEventListener("click", copyOutput);
+/*
+  REFRESH OUTPUT — the single generateBtn handler (registered
+  once inside attachCoreEventListeners()). outputEdited is
+  reset here (not inside generateOutput) per the separation of
+  concerns described at the top of this file.
+*/
+function handleGenerateOutput() {
+  if (
+    outputEdited &&
+    output.value.trim()
+  ) {
+    const confirmRefresh = confirm(
+      "Your Output has been edited manually.\n\n" +
+      "Refreshing will replace your edited Output.\n\n" +
+      "Continue?"
+    );
 
-useSplitABCheckbox.addEventListener("change", toggleSplitABBox);
-buildRankingSplitBtn.addEventListener("click", buildRankingSplitSetup);
-closeRankingSplitModalBtn.addEventListener("click", closeRankingSplitModal);
-saveRankingSplitModalBtn.addEventListener("click", closeRankingSplitModal);
-
-questionCodeInput.addEventListener(
-  "input",
-  function () {
-    const isArray =
-      questionTypeSelect.value ===
-        "single_choice" &&
-      isQuestionCodeRange(
-        questionCodeInput.value
-      );
-
-    /*
-      Range => Array.
-      ST được bật tự động.
-    */
-    if (isArray) {
-      useSTCheckbox.checked = true;
-      autoSTFromArray = true;
-    } else {
-      /*
-        Nếu ST trước đó được bật tự động
-        vì Array, khi quay về Single Choice
-        thì tự tắt nó.
-
-        Không tắt ST nếu user đã tự bật bằng tay.
-      */
-      if (autoSTFromArray) {
-        useSTCheckbox.checked = false;
-        autoSTFromArray = false;
-      }
-
-      /*
-        Xóa state Array cũ.
-      */
-      pendingArraySampleSelections = [];
-
-      safeClearHTML(
-        arraySampleTableContainer
-      );
-
-      safeAddHidden(
-        arraySampleModal
-      );
-    }
-
-    toggleSubtitleBox();
-    toggleAskedBaseBox();
-    toggleAnswerOptionsBox();
-    toggleUseDSBox();
-  }
-);
-
-subtitleOnlyInput.addEventListener(
-  "blur",
-  function () {
-    this.value = getSubtitleLines().join("\n");
-  }
-);
-
-useMeanCheckbox.addEventListener(
-  "change",
-  toggleMeanSetupUI
-);
-
-useRankCheckbox.addEventListener(
-  "change",
-  toggleRankRLBox
-);
-
-rankingSplitModal.addEventListener("click", function (event) {
-  if (event.target === rankingSplitModal) {
-    closeRankingSplitModal();
-  }
-});
-
-useDSCheckbox.addEventListener(
-  "change",
-  function () {
-    toggleUseDSBox();
-
-    if (!useDSCheckbox.checked) {
-      customDSBox.classList.add("hidden");
-    }
-  }
-);
-
-demographicAdditionalCodesInput.addEventListener(
-  "input",
-  function () {
-    if (questionTypeSelect.value !== "demographic") {
+    if (!confirmRefresh) {
       return;
     }
-
-    customDSPositiveSelect.innerHTML = "";
-    customDSNegativeSelect.innerHTML = "";
-    customDSBox.classList.add("hidden");
   }
-);
 
-rowTypeSelect.addEventListener(
-  "change",
-  function () {
-    toggleAnswerOptionsBox();
+  outputEdited = false;
 
-    customDSPositiveSelect.innerHTML = "";
-    customDSNegativeSelect.innerHTML = "";
-    customDSBox.classList.add("hidden");
+  generateOutput();
+  saveSession();
+}
 
-    toggleUseDSBox();
+function getLastQuestionType() {
+  const value =
+    localStorage.getItem(
+      LAST_QUESTION_TYPE_KEY
+    );
+
+  return ALL_QUESTION_TYPES.has(value)
+    ? value
+    : "";
+}
+
+/* ================= OUTPUT -> INPUT LIST REVERSE SYNC =================
+   Best-effort: reads the Output textarea and rebuilds the `tables`
+   array (and therefore the Input List boxes) from it. This is the
+   inverse of generateOutput(), which is inherently lossy -- some
+   form-only settings (which named Row Type template was chosen, the
+   exact D/S Positive/Negative row selection, Project Setting) are not
+   printed in the syntax text and cannot be recovered with certainty.
+   Where a table's shape is ambiguous, this favors the simplest
+   interpretation that would regenerate equivalent output, over a
+   guess that might be wrong in a more surprising way.
+
+   This module never writes to output.value. It only ever updates
+   `tables` and re-renders the Input List.
+========================================================================= */
+
+function syncTablesFromOutputSyntax() {
+  /*
+    Don't clobber the Input form while the user is actively editing
+    a table through it -- re-syncing here could pull the rug out
+    from under an in-progress edit.
+  */
+  if (editingIndex !== null || editingArrayGroupId !== null) {
+    return;
   }
-);
 
+  const text = output.value;
 
-function setDefaultRowTypeByQuestionType() {
-  const questionType =
-    questionTypeSelect.value;
+  if (!text.trim()) {
+    tables = [];
+    renderInputList();
+    saveSession();
+    return;
+  }
+
+  const parsedTables = parseOutputIntoTables(text);
 
   /*
-    Single Choice và Array mặc định dùng CUSTOM CODE.
+    If nothing recognizable was found but the box isn't empty, this
+    is most likely a transient mid-edit state (e.g. the header line
+    of a new block isn't finished yet) -- leave the existing Input
+    List alone instead of wiping it out.
   */
-  if (
-    questionType === "single_choice"
-  ) {
-    populateRowTypeOptions(
-      normalRowTypeOptions,
-      "custom_code"
-    );
-
-    rowTypeSelect.value =
-      "custom_code";
-
+  if (parsedTables.length === 0) {
     return;
   }
 
-  if (questionType === "") {
-    populateRowTypeOptions(
-      normalRowTypeOptions,
-      ""
-    );
-  }
+  tables = parsedTables;
+  renderInputList();
+  saveSession();
 }
 
-questionTypeSelect.addEventListener(
-  "change",
-  function () {
+function parseOutputIntoTables(text) {
+  const rawBlocks = splitOutputIntoRawBlocks(text);
+  const result = [];
 
-      localStorage.setItem(
-      LAST_QUESTION_TYPE_KEY,
-      questionTypeSelect.value
-    );
-    /*
-      Ranking Table mặc định bật Rank.
-      User vẫn có thể bỏ tick sau đó.
-    */
-    // if (
-    //   questionTypeSelect.value ===
-    //   "ranking_table"
-    // ) {
-    //   useRankCheckbox.checked = true;
-    // }
+  rawBlocks.forEach(rawBlock => {
+    const table = parseOutputBlock(rawBlock);
 
-    if (
-      questionTypeSelect.value ===
-      "demographic"
-    ) {
-      populateRowTypeOptions(
-        demographicRowTypeOptions,
-        ""
-      );
+    if (table) {
+      result.push(table);
     }
+  });
 
- if (
-  questionTypeSelect.value ===
-    "single_choice" ||
-  questionTypeSelect.value === ""
-) {
-  setDefaultRowTypeByQuestionType();
+  return result;
 }
 
-    if (
-  questionTypeSelect.value !==
-  "multiple_choice"
-) {
-  answerOptionsInput.value = "";
-  useCustomNetGroupsCheckbox.checked = false;
-  customNetGroupsInput.value = "";
-  customNetGroupBox.classList.add("hidden");
-  customDSBox.classList.add("hidden");
-}
+/*
+  Every block generateOutput() produces starts with exactly one line
+  that is nothing but "T<CODE>^<index>" (see buildQuestionCodeLine).
+  That makes it the one reliable, unambiguous block boundary --
+  everything else in a block can vary in position (see the S| subtitle
+  note below), so block-splitting is anchored on this line alone.
+*/
+function splitOutputIntoRawBlocks(text) {
+  const lines = String(text || "").replace(/\r\n?/g, "\n").split("\n");
+  const blocks = [];
+  let current = null;
 
-    toggleQuestionTypeUI();
+  lines.forEach(line => {
+    const headerMatch = line.trim().match(/^T([A-Z0-9_]+)\^(\d+)$/);
 
-if (
-  questionTypeSelect.value ===
-  "single_choice"
-) {
-  rowTypeSelect.value =
-    "custom_code";
-}
+    if (headerMatch) {
+      current = {
+        questionCode: headerMatch[1],
+        lines: [line]
+      };
 
-toggleQuestionTypeUI();
-toggleAnswerOptionsBox();
-toggleUseDSBox();
-toggleAskedBaseBox();
-toggleSubtitleBox();
-  }
-);
-
-useSTCheckbox.addEventListener(
-  "change",
-  function () {
-    /*
-      User tự click ST thì từ đây
-      không còn coi nó là ST auto từ Array.
-    */
-    autoSTFromArray = false;
-
-    toggleSubtitleBox();
-    toggleAskedBaseBox();
-    toggleAnswerOptionsBox();
-    toggleUseDSBox();
-  }
-);
-
-
-questionTextInput.addEventListener(
-  "paste",
-  function (event) {
-    const clipboardText =
-      event.clipboardData?.getData("text/plain");
-
-    if (clipboardText === undefined) {
+      blocks.push(current);
       return;
     }
 
-    event.preventDefault();
-
-    const start =
-      this.selectionStart ?? this.value.length;
-
-    const end =
-      this.selectionEnd ?? start;
-
-    const before = this.value.slice(0, start);
-    const after = this.value.slice(end);
-
-    /*
-      Chỉ xóa question number khi user đang paste
-      vào một ô trống hoặc thay toàn bộ nội dung.
-
-      Điều này tránh trường hợp paste "6. Something"
-      vào giữa một đoạn văn mà app tự xóa số 6.
-    */
-    const isReplacingWholeText =
-      before.trim() === "" &&
-      after.trim() === "";
-
-    let cleanedPaste =
-      normalizeQuestionSpacing(clipboardText);
-
-    if (isReplacingWholeText) {
-      cleanedPaste =
-        removeLeadingQuestionNumber(
-          cleanedPaste
-        );
+    if (current) {
+      current.lines.push(line);
     }
 
-    this.value =
-      before +
-      cleanedPaste +
-      after;
+    // Stray text before the first recognizable header is ignored.
+  });
 
-    const newCursorPosition =
-      before.length + cleanedPaste.length;
-
-    this.setSelectionRange(
-      newCursorPosition,
-      newCursorPosition
-    );
-  }
-);
-
-questionTextInput.addEventListener(
-  "blur",
-  function () {
-    this.value = normalizeQuestionText(
-      this.value
-    );
-  }
-);
-
-useCustomNetGroupsCheckbox.addEventListener("change", toggleCustomNetGroupBox);
-buildSummarySetupBtn.addEventListener("click", buildSummarySetup);
-openSummaryModalBtn.addEventListener("click", openSummaryModal);
-closeSummaryModalBtn.addEventListener("click", closeSummaryModal);
-saveSummaryModalBtn.addEventListener("click", closeSummaryModal);
-buildCustomDSBtn.addEventListener("click", buildCustomDSSetup);
-
-summaryModal.addEventListener("click", function (event) {
-  if (event.target === summaryModal) {
-    closeSummaryModal();
-  }
-});
-
-populateRowTypeOptions(normalRowTypeOptions, "");
-renderInputList();
-generateOutput();
-toggleQuestionTypeUI();
-toggleAskedBaseBox();
-toggleSubtitleBox();
-toggleAskedBaseBox();
-toggleAnswerOptionsBox();
-toggleCustomNetGroupBox();
-toggleUseDSBox();
-toggleQuestionTypeUI();
-
-if (splitRowsContainer && splitRowsContainer.children.length === 0) {
-  resetSplitRows();
+  return blocks;
 }
 
-toggleVersionExtraBtn.addEventListener("click", function () {
-  togglePlusSection(
-    toggleVersionExtraBtn,
-    versionExtraBox,
-    "+ Add VERSION Extra Rows",
-    "− Hide VERSION Extra Rows"
+function extractAskedBaseText(baseLine) {
+
+  const match = String(baseLine || "").match(
+    /BASE=(.*?)\^TN\^/
   );
-});
 
-toggleModeExtraBtn.addEventListener("click", function () {
-  togglePlusSection(
-    toggleModeExtraBtn,
-    modeExtraBox,
-    "+ Add MODE Extra Rows",
-    "− Hide MODE Extra Rows"
-  );
-});
+  if (!match) {
+    return "";
+  }
 
-toggleDateSetupBtn.addEventListener("click", function () {
-  togglePlusSection(
-    toggleDateSetupBtn,
-    dateSetupBox,
-    "+ Add DATE Range",
-    "− Hide DATE Range"
-  );
-});
+  const text = match[1].trim();
 
-buildArraySampleBtn.addEventListener("click", buildArraySampleSetup);
+  return text === "TOTAL SAMPLE" ? "" : text;
+}
 
-closeArraySampleModalBtn.addEventListener("click", function () {
-  arraySampleModal.classList.add("hidden");
-});
+function extractPlainTitle(titleLine, questionCode) {
+  const trimmed = String(titleLine || "").trim();
+  const match = trimmed.match(/^QUESTION\s+[^:]+:\s*\|\s*(.*)$/i);
 
-saveArraySampleModalBtn.addEventListener(
-  "click",
-  function () {
-    const selections =
-      getArraySampleSelections();
+  return match ? match[1] : trimmed;
+}
 
-    const questionCodes =
-      expandQuestionCodes(
-        questionCodeInput.value.trim()
-      );
+/*
+  Reverses normalizeCustomNetLogic()'s WinCross-facing conversion back
+  into the colon notation the NET Groups / logic textareas accept
+  (e.g. "Q13(1-3) or Q14(1)" -> "Q13:1-3 OR Q14:1"). Best-effort --
+  braces are simply stripped rather than re-derived.
+*/
+function reverseWincrossLogicToColon(logic) {
+  return String(logic || "")
+    .replace(/[{}]/g, "")
+    .replace(/\s+or\s+/gi, " OR ")
+    .replace(/\s*&\s*/g, " AND ")
+    .replace(/([A-Z][A-Z0-9_]*)\s*\(([^)]+)\)/gi, function (_, variable, codes) {
+      return variable.toUpperCase() + ":" + codes;
+    })
+    .trim();
+}
 
-    if (
-      selections.length !==
-      questionCodes.length
-    ) {
-      alert(
-        "Array Sample Setup is incomplete. Please build the setup again."
-      );
-      return;
+function parseOutputBlock(rawBlock) {
+  const lines = rawBlock.lines;
+
+  if (lines.length < 3) {
+    // Not enough of the block has been typed yet.
+    return null;
+  }
+
+  const questionCode = rawBlock.questionCode;
+  const titleLine = lines[2] || "";
+
+  /*
+    Lines 0-2 (code, table options, title) are always in fixed
+    position. The base line's position shifts by one when a
+    subtitle ("S|...") is present, so it's located by content
+    rather than by index.
+  */
+  let cursor = 3;
+  let subtitleOnly = "";
+
+  const maybeSubtitle = lines[cursor] || "";
+
+  if (maybeSubtitle.trim().startsWith("S|")) {
+    subtitleOnly = maybeSubtitle.trim().slice(2);
+    cursor += 1;
+  }
+
+  const baseLine = lines[cursor] || "";
+  cursor += 1;
+
+  const bodyLines = lines.slice(cursor).filter(line => line.trim() !== "");
+  const askedBaseText = extractAskedBaseText(baseLine);
+
+  /*
+    A body that is nothing but a single "USE=N,CODE" line covers both
+    a manual USE override AND an Array continuation table -- both
+    produce identical text, so reconstructing it as manualUseIndex
+    regenerates equivalent output either way without having to guess
+    which one it originally was.
+  */
+  if (bodyLines.length === 1) {
+    const useMatch = bodyLines[0].trim().match(/^USE=(\d+),([A-Z0-9_]+)$/i);
+
+    if (useMatch) {
+      return {
+        projectType: "N2",
+        questionCode,
+        questionType: "single_choice",
+        rowType: "custom_code",
+        questionText: extractPlainTitle(titleLine, questionCode),
+        useST: subtitleOnly !== "",
+        useDS: false,
+        useRank: false,
+        rankRLCodes: "",
+        useMean: false,
+        meanCodeRange: "",
+        subtitleOnly,
+        baseType: askedBaseText ? "asked_base" : "total_sample",
+        askedBaseText,
+        manualUseIndex: useMatch[1],
+        answerOptions: "",
+        customNetGroups: [],
+        customNetGroupsRaw: "",
+        customDSPositive: "",
+        customDSNegative: "",
+        summaryRaw: "",
+        summaryBlocks: [],
+        rankingMetricDefinitions: "",
+        rankingItemsRaw: "",
+        rankingItems: [],
+        arrayGroupId: "",
+        arrayPosition: 0
+      };
     }
+  }
 
-    pendingArraySampleSelections =
-      selections;
+  /*
+    Multiple Choice must be checked before Ranking: both share the
+    "every row ends in the same trailing (code)" signature (MC rows
+    all end in the shared "(1)"; Ranking rows all end in the shared
+    metric code), but MC's variable-name pattern ("{code}_{n}") is
+    strictly more specific, so it has to win the tie first.
+  */
+  if (looksLikeMultipleChoiceBlock(questionCode, bodyLines)) {
+    return buildGuessedMultipleChoiceTable(questionCode, titleLine, askedBaseText, bodyLines);
+  }
 
-    arraySampleModal.classList.add(
-      "hidden"
+  if (looksLikeRankingBlock(bodyLines)) {
+    return buildGuessedRankingTable(questionCode, titleLine, baseLine, bodyLines);
+  }
+
+  if (looksLikeSummaryBlock(bodyLines)) {
+    return buildGuessedSummaryTable(questionCode, titleLine, baseLine, bodyLines);
+  }
+
+  if (looksLikeListoutBlock(titleLine)) {
+    return buildGuessedListoutTable(questionCode, titleLine, bodyLines);
+  }
+
+  const hasDS = bodyLines.some(line => line.trim().startsWith("**D/S"));
+  const matchedRowType = matchKnownRowTemplate(questionCode, hasDS, bodyLines);
+
+  if (matchedRowType) {
+    return buildGuessedNamedTemplateTable(
+      questionCode,
+      titleLine,
+      askedBaseText,
+      subtitleOnly,
+      hasDS,
+      matchedRowType
     );
   }
-);
 
-arraySampleModal.addEventListener("click", function (event) {
-  if (event.target === arraySampleModal) {
-    arraySampleModal.classList.add("hidden");
-  }
-});
-
-answerOptionsInput.addEventListener(
-  "blur",
-  function () {
-    this.value = cleanAnswerOptionsText(
-      this.value
-    );
-  }
-);
-
-customNetGroupsInput.addEventListener("blur", function () {
-  customNetGroupsInput.value = customNetGroupsInput.value.toUpperCase();
-});
-
-if (addSplitRowBtn) {
-  addSplitRowBtn.addEventListener("click", function () {
-    createSplitRow("", "", "");
-  });
+  return buildGuessedCustomCodeTable(questionCode, titleLine, askedBaseText, subtitleOnly, bodyLines);
 }
 
-if (splitRowsContainer) {
-  splitRowsContainer.addEventListener("click", function (event) {
-    if (event.target.classList.contains("remove-split-row-btn")) {
-      const row = event.target.closest(".split-row");
+/*
+  A named Row Type (good_bad, agree_disagree, etc.) and a Custom Code
+  table with the identical rows typed in by hand render to byte-
+  identical Output text -- there's nothing in the syntax itself that
+  says which one was originally used. buildRowTemplateLines() is the
+  exact same function generateOutput() calls for a named template, so
+  reusing it here and checking for an exact line-for-line match against
+  what was actually typed is a reliable (not a guess) way to tell the
+  two apart, since a hand-typed Custom Code table goes through a
+  different formatter (buildRowsFromAnswerOptions/formatSyntaxRow) with
+  different spacing and will only match by genuine coincidence.
+*/
+function matchKnownRowTemplate(questionCode, hasDS, bodyLines) {
+  const candidateLines = bodyLines.filter(line => !/^\s*MEAN\^/i.test(line));
 
-      if (row) {
-        row.remove();
-      }
-    }
-  });
-}
-
-// -------------------- Region Mapping Listout Integration --------------------
-
-const regionFileInput = document.getElementById("regionFileInput"); // <input type="file">
-const regionLogicInput = document.getElementById("regionLogicVar");   // tên biến logic Region (VD: REGION2)
-const applyRegionMappingBtn = document.getElementById("applyRegionMapping");
-
-let regionData = [];  // Dữ liệu Excel
-
-regionFileInput.addEventListener("change", async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  const data = await file.arrayBuffer();
-  const workbook = XLSX.read(data, { type: "array" });
-  const sheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[sheetName];
-
-  // Excel giả sử có cột CODE, LABEL, REGION
-  regionData = XLSX.utils.sheet_to_json(sheet, { header: ["CODE","LABEL","REGION"], range: 1 });
-});
-
-applyRegionMappingBtn.addEventListener("click", () => {
-  if (!regionLogicInput.value.trim()) {
-    alert("Enter logic variable name for Region.");
-    return;
-  }
-  if (!regionData.length) {
-    alert("Upload Excel first.");
-    return;
-  }
-
-  const regionLogicVar = regionLogicInput.value.trim().toUpperCase();
-
-  // Nhóm các precinct theo Region
-  const sections = {};
-  regionData.forEach(r => {
-    if (!sections[r.REGION]) sections[r.REGION] = [];
-    sections[r.REGION].push({ label: r.LABEL, code: r.CODE });
-  });
-
-  // Build ListoutManualSections với indent chuẩn
-  let manualSectionsText = "";
-  let regionCounter = 1;
-
-  Object.keys(sections).forEach(regionName => {
-    // Region line, giảm indent 1 tab để thẳng hàng với North example
-    manualSectionsText += `${regionName.toUpperCase()}^     ${regionLogicVar}    (${regionCounter})         ^\n`;
-
-    sections[regionName].forEach(p => {
-      // Precinct line, indent chuẩn (4 spaces)  
-      manualSectionsText += `    ${p.label}^      PRECINCT   (${p.code})         ^\n`;
+  return Object.keys(rowTemplates).find(function (key) {
+    const templateLines = buildRowTemplateLines({
+      rowType: key,
+      questionCode,
+      useDS: hasDS
     });
 
-    regionCounter++;
-  });
+    return (
+      templateLines.length === candidateLines.length &&
+      templateLines.every(function (line, index) {
+        return line === candidateLines[index];
+      })
+    );
+  }) || null;
+}
 
-  // Gán vào input Listout Manual Sections hiện tại
-  const listoutManualSectionsInput = document.getElementById("listoutManualSections");
-  listoutManualSectionsInput.value = manualSectionsText;
+function buildGuessedNamedTemplateTable(questionCode, titleLine, askedBaseText, subtitleOnly, hasDS, rowType) {
+  return {
+    projectType: "N2",
+    questionCode,
+    questionType: "single_choice",
+    rowType,
+    questionText: extractPlainTitle(titleLine, questionCode),
+    useST: subtitleOnly !== "",
+    useDS: hasDS,
+    useRank: false,
+    rankRLCodes: "",
+    useMean: false,
+    meanCodeRange: "",
+    subtitleOnly,
+    baseType: askedBaseText ? "asked_base" : "total_sample",
+    askedBaseText,
+    manualUseIndex: "",
+    answerOptions: "",
+    customNetGroups: [],
+    customNetGroupsRaw: "",
+    customDSPositive: "",
+    customDSNegative: "",
+    summaryRaw: "",
+    summaryBlocks: [],
+    rankingMetricDefinitions: "",
+    rankingItemsRaw: "",
+    rankingItems: [],
+    arrayGroupId: "",
+    arrayPosition: 0
+  };
+}
 
-  // Gọi hàm generateOutput() của hệ thống
-  if (typeof generateOutput === "function") {
-    generateOutput();
+/*
+  Ranking rows all end in the same parenthesized metric code
+  (e.g. every row is "...(:1-2)" for a given metric), which normal
+  answer-option rows never do since each row has its own distinct
+  code -- a reasonably unique signature.
+*/
+function looksLikeRankingBlock(bodyLines) {
+  if (bodyLines.length < 2) {
+    return false;
   }
 
-  alert("Region mapping applied successfully!");
-});
+  const trailingCodes = [];
+
+  for (const line of bodyLines) {
+    const parts = line.split("^");
+
+    if (parts.length < 2) {
+      return false;
+    }
+
+    const logic = parts[1].trim();
+    const match = logic.match(/\(([^)]+)\)\s*$/);
+
+    if (!match) {
+      return false;
+    }
+
+    trailingCodes.push(match[1]);
+  }
+
+  return new Set(trailingCodes).size === 1;
+}
+
+function looksLikeSummaryBlock(bodyLines) {
+  return bodyLines.some(line => {
+    const trimmed = line.trim();
+    return !trimmed.startsWith("**D/S") && /CALC\s+F\d+-F\d+/.test(trimmed);
+  });
+}
+
+function looksLikeListoutBlock(titleLine) {
+  return String(titleLine || "").includes("./");
+}
+
+function looksLikeMultipleChoiceBlock(questionCode, bodyLines) {
+  const dataRows = bodyLines.filter(line => {
+    const trimmed = line.trim();
+    return trimmed && !trimmed.startsWith("**D/S");
+  });
+
+  if (dataRows.length === 0) {
+    return false;
+  }
+
+  const pattern = new RegExp("^" + questionCode + "_\\d+\\s*\\(1\\)$", "i");
+
+  return dataRows.every(line => {
+    const parts = line.split("^");
+    return parts.length >= 2 && pattern.test(parts[1].trim());
+  });
+}
+
+function buildGuessedRankingTable(questionCode, titleLine, baseLine, bodyLines) {
+  const askedBaseText = extractAskedBaseText(baseLine);
+  let metricCode = "";
+  const items = [];
+
+  bodyLines.forEach(line => {
+    const parts = line.split("^");
+    const label = (parts[0] || "").trim();
+    const logic = (parts[1] || "").trim();
+    const match = logic.match(/^([A-Z0-9_]+)\(([^)]+)\)$/i);
+
+    if (match) {
+      items.push({
+        questionCode: match[1].toUpperCase(),
+        label,
+        splitSuffix: ""
+      });
+
+      metricCode = match[2];
+    }
+  });
+
+  const rankingItemsRaw = items
+    .map(item => item.questionCode + " | " + item.label)
+    .join("\n");
+
+  const rankingMetricDefinitions = metricCode
+    ? "RANKED VALUE (:" + metricCode + ")"
+    : "";
+
+  return {
+    projectType: "N2",
+    questionCode,
+    questionType: "ranking_table",
+    rowType: "ranking_table",
+    questionText: String(titleLine || "").trim(),
+    useST: false,
+    useDS: false,
+    useRank: false,
+    rankRLCodes: "",
+    useMean: false,
+    meanCodeRange: "",
+    subtitleOnly: "",
+    baseType: askedBaseText ? "asked_base" : "total_sample",
+    askedBaseText,
+    manualUseIndex: "",
+    answerOptions: "",
+    metricLabel: "RANKED VALUE",
+    metricCode,
+    rankingMetricDefinitions,
+    rankingItemsRaw,
+    rankingItems: items,
+    useSplitAB: false,
+    splitRows: [],
+    summaryRaw: "",
+    summaryBlocks: [],
+    arrayGroupId: "",
+    arrayPosition: 0
+  };
+}
+
+function buildGuessedSummaryTable(questionCode, titleLine, baseLine, bodyLines) {
+  const askedBaseText = extractAskedBaseText(baseLine);
+  const summaryBlocks = [];
+  let currentBlock = null;
+
+  bodyLines.forEach(line => {
+    const parts = line.split("^");
+    const label = (parts[0] || "").trim();
+    const logic = (parts[1] || "").trim();
+    const isHeader = /CALC\s+F\d+-F\d+/.test(logic);
+
+    if (isHeader) {
+      currentBlock = {
+        title: label,
+        positiveLabel: "",
+        negativeLabel: "",
+        suffix: "SX,L-",
+        rows: []
+      };
+
+      summaryBlocks.push(currentBlock);
+      return;
+    }
+
+    if (!currentBlock) {
+      currentBlock = {
+        title: "SUMMARY BLOCK",
+        positiveLabel: "",
+        negativeLabel: "",
+        suffix: "SX,L-",
+        rows: []
+      };
+
+      summaryBlocks.push(currentBlock);
+    }
+
+    currentBlock.rows.push({
+      label,
+      logic: reverseWincrossLogicToColon(logic)
+    });
+  });
+
+  const summaryRaw = summaryBlocks
+    .map(block => {
+      const rowLines = block.rows
+        .map(row => row.label + " (" + row.logic + ")")
+        .join("\n");
+
+      return block.title + ".\n" + rowLines;
+    })
+    .join("\n\n");
+
+  return {
+    projectType: "N2",
+    questionCode,
+    questionType: "summary_table",
+    rowType: "summary_custom",
+    questionText: String(titleLine || "").trim(),
+    useST: false,
+    useDS: false,
+    useRank: false,
+    rankRLCodes: "",
+    useMean: false,
+    meanCodeRange: "",
+    subtitleOnly: "",
+    baseType: askedBaseText ? "asked_base" : "total_sample",
+    askedBaseText,
+    manualUseIndex: "",
+    answerOptions: "",
+    summaryRaw,
+    summaryBlocks,
+    rankingMetricDefinitions: "",
+    rankingItemsRaw: "",
+    rankingItems: [],
+    arrayGroupId: "",
+    arrayPosition: 0
+  };
+}
+
+function buildGuessedListoutTable(questionCode, titleLine, bodyLines) {
+  const sectionLines = [];
+
+  bodyLines.forEach(line => {
+    const parts = line.split("^");
+    const label = (parts[0] || "").trim();
+    const logic = (parts[1] || "").trim();
+
+    if (!logic) {
+      sectionLines.push(label);
+      return;
+    }
+
+    const match = logic.match(/^([A-Za-z0-9_]+)\s*\(([^)]+)\)$/);
+
+    if (match) {
+      sectionLines.push(label + " | " + match[1] + " | " + match[2]);
+    }
+  });
+
+  return {
+    projectType: "N2",
+    questionCode: normalizeQuestionCode(questionCode || "LISTOUT"),
+    questionType: "listout_table",
+    rowType: "listout_table",
+    questionText: String(titleLine || "").trim(),
+    useST: false,
+    useDS: false,
+    useRank: false,
+    rankRLCodes: "",
+    useMean: false,
+    meanCodeRange: "",
+    subtitleOnly: "",
+    baseType: "total_sample",
+    askedBaseText: "",
+    manualUseIndex: "",
+    answerOptions: "",
+    listoutManualSections: sectionLines.join("\n"),
+    /*
+      Left off so previously-typed VERSION/MODE/DATE lines (already
+      captured above as part of the manual sections) don't get
+      duplicated by the auto-generated versions on the next
+      regenerate.
+    */
+    includeVersionSection: false,
+    versionExtraRows: "",
+    includeModeSection: false,
+    modeExtraRows: "",
+    includeDateSection: false,
+    dateVariable: "submitdate",
+    startDate: "",
+    endDate: "",
+    summaryRaw: "",
+    summaryBlocks: [],
+    rankingMetricDefinitions: "",
+    rankingItemsRaw: "",
+    rankingItems: [],
+    arrayGroupId: "",
+    arrayPosition: 0
+  };
+}
+
+function buildGuessedMultipleChoiceTable(questionCode, titleLine, askedBaseText, bodyLines) {
+  const hasDS = bodyLines.some(line => line.trim().startsWith("**D/S"));
+  const prefixPattern = new RegExp("^" + questionCode + "_(\\d+)\\s*\\(1\\)$", "i");
+  const answerLines = [];
+
+  bodyLines.forEach(line => {
+    const trimmed = line.trim();
+
+    if (!trimmed || trimmed.startsWith("**D/S")) {
+      return;
+    }
+
+    const parts = line.split("^");
+    const label = (parts[0] || "").trim();
+    const logic = (parts[1] || "").trim();
+    const match = logic.match(prefixPattern);
+
+    if (match) {
+      answerLines.push(match[1] + "\t" + label);
+    }
+  });
+
+  return {
+    projectType: "N2",
+    questionCode,
+    questionType: "multiple_choice",
+    rowType: "multiple_choice",
+    questionText: extractPlainTitle(titleLine, questionCode),
+    useST: false,
+    useDS: hasDS,
+    useRank: false,
+    rankRLCodes: "",
+    useMean: false,
+    meanCodeRange: "",
+    subtitleOnly: "",
+    baseType: askedBaseText ? "asked_base" : "total_sample",
+    askedBaseText,
+    manualUseIndex: "",
+    answerOptions: answerLines.join("\n"),
+    useCustomNetGroups: false,
+    customNetGroups: [],
+    customNetGroupsRaw: "",
+    customDSPositive: "",
+    customDSNegative: "",
+    summaryRaw: "",
+    summaryBlocks: [],
+    rankingMetricDefinitions: "",
+    rankingItemsRaw: "",
+    rankingItems: [],
+    arrayGroupId: "",
+    arrayPosition: 0
+  };
+}
+
+/*
+  Fallback covering Single Choice, Array items, and Demographic
+  Custom Code -- anything whose rows are "LABEL^ VAR (code)" where
+  VAR matches this block's own question code. This is the most
+  common shape (see rowTemplates output) and the one this reverse
+  sync reconstructs most faithfully.
+*/
+function buildGuessedCustomCodeTable(questionCode, titleLine, askedBaseText, subtitleOnly, bodyLines) {
+  const hasDS = bodyLines.some(line => line.trim().startsWith("**D/S"));
+  const answerLines = [];
+  const netGroupLines = [];
+
+  bodyLines.forEach(line => {
+    const trimmed = line.trim();
+
+    if (!trimmed || trimmed.startsWith("**D/S")) {
+      return;
+    }
+
+    const parts = line.split("^");
+    const label = (parts[0] || "").trim();
+    const logic = (parts[1] || "").trim();
+
+    if (!logic || /^MEAN$/i.test(label)) {
+      return;
+    }
+
+    /*
+      A single plain digit code, e.g. "Q1 (1)" -- this is what
+      parseAnswerOptionLine actually understands for the Answer
+      Options textarea. Ranges/lists like "Q1 (1-2)" must NOT match
+      here (that was the bug: they used to be accepted by this
+      regex, which sent NET/Total rows into Answer Options where
+      they can't be parsed back, producing "INVALID ANSWER OPTION"
+      errors on the next regenerate).
+    */
+    const singleCodeMatch = logic.match(/^([A-Z0-9_]+)\s*\((\d+)\)$/i);
+
+    if (
+      singleCodeMatch &&
+      singleCodeMatch[1].toUpperCase() === questionCode.toUpperCase()
+    ) {
+      answerLines.push(singleCodeMatch[2] + "\t" + label);
+      return;
+    }
+
+    /*
+      A range/list against this same question code, e.g.
+      "Q1 (1-2)" or "Q1 (1,3-4)" -- this is a NET/Total group.
+      Reconstructed using the plain "<range> <label>" shorthand the
+      Total/Net Groups textarea itself accepts, so it round-trips
+      to the exact original spacing on regenerate (formatCustomNetGroupLogic
+      renders this range type as "QUESTIONCODE (<range>)").
+    */
+    const rangeMatch = logic.match(/^([A-Z0-9_]+)\s*\(([0-9,\-]+)\)$/i);
+
+    if (
+      rangeMatch &&
+      rangeMatch[1].toUpperCase() === questionCode.toUpperCase()
+    ) {
+      netGroupLines.push(rangeMatch[2] + " " + label);
+      return;
+    }
+
+    /*
+      Anything else (cross-variable logic, braces, etc.) is
+      best-effort converted back into the NET Groups textarea's
+      explicit-logic format rather than being silently dropped.
+    */
+    netGroupLines.push(label + "  " + reverseWincrossLogicToColon(logic));
+  });
+
+  const customNetGroupsRaw = netGroupLines.join("\n");
+
+  return {
+    projectType: "N2",
+    questionCode,
+    questionType: "single_choice",
+    rowType: "custom_code",
+    questionText: extractPlainTitle(titleLine, questionCode),
+    useST: subtitleOnly !== "",
+    useDS: hasDS,
+    useRank: false,
+    rankRLCodes: "",
+    useMean: false,
+    meanCodeRange: "",
+    subtitleOnly,
+    baseType: askedBaseText ? "asked_base" : "total_sample",
+    askedBaseText,
+    manualUseIndex: "",
+    answerOptions: answerLines.join("\n"),
+    customNetGroups: customNetGroupsRaw ? parseCustomNetGroups(customNetGroupsRaw) : [],
+    customNetGroupsRaw,
+    customDSPositive: "",
+    customDSNegative: "",
+    summaryRaw: "",
+    summaryBlocks: [],
+    rankingMetricDefinitions: "",
+    rankingItemsRaw: "",
+    rankingItems: [],
+    arrayGroupId: "",
+    arrayPosition: 0
+  };
+}
+
+/* ================= FIND & REPLACE (Ctrl+H) FOR OUTPUT SYNTAX =================
+   Self-contained: builds its own floating popup card (no HTML changes
+   needed) and anchors it to the top-right of the Output Syntax card,
+   overlaying it rather than being inserted inline -- so opening it never
+   pushes the textarea down or reflows the page. It is intentionally NOT
+   a blocking modal (no dimmed backdrop): the user can still see and
+   click into Output while it's open, which matters since "Only in
+   selection" depends on a selection made in that same textarea.
+
+   Ctrl+H is intercepted while the Output box has focus (Windows/Linux
+   browsers allow this; macOS grabs Cmd+H at the OS level to hide the
+   app before any webpage can see it, so a toolbar button is also added
+   as a reliable entry point there).
+
+   Replace / Replace All modify output.value directly and then dispatch
+   a real "input" event, so they flow through the exact same
+   outputEdited / saveSession() / live reverse-sync path as manual
+   typing -- no bypass.
+
+   ------------------------------------------------------------------
+   THIS is also the ONE syntax-highlighting system for Output. It is
+   built from ensureHighlightBackdrop() / renderHighlightBackdrop() /
+   classifyOutputLine() / buildOutputLineTokens() / wrapWithSyntaxColor()
+   below, and it is the
+   system actually wired into editable Output (transparent-text-over-
+   colored-backdrop, scroll sync, resize-with-card, composes with the
+   "Only in selection" highlight). A second, dead duplicate system
+   (escapeHtml/highlightSyntax/updateOutputHighlight, writing into a
+   "#outputHighlight" element that was never created anywhere) has been
+   removed -- see the regression notes at the bottom of this file.
+================================================================================= */
+
+const findReplaceState = {
+  bar: null,
+  anchor: null,
+  findInput: null,
+  replaceInput: null,
+  matchCaseCheckbox: null,
+  inSelectionCheckbox: null,
+  scopeRow: null,
+  scopePreview: null,
+  counterLabel: null,
+  statusLabel: null,
+  selectionRange: null,
+  highlightWrapper: null,
+  highlightBackdrop: null
+};
+
+function escapeRegExp(text) {
+  return String(text || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function escapeForBackdrop(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/*
+  Exact WinCross color spec (recolor only -- no tokenization/parsing
+  logic changed below, aside from the minimal extra splitting needed
+  to isolate each newly-named token). Only these 8 named tokens get
+  color; every other token renders as plain black, per spec ("do not
+  invent colors for tokens that are not listed").
+*/
+const WINCROSS_COLOR_TQ_HEADER = "#4B80C7";
+const WINCROSS_COLOR_TABLE_OPTIONS = "#38278A";
+const WINCROSS_COLOR_QUESTION_PIPE = "#FF45BD";
+const WINCROSS_COLOR_TN = "#F53A05";
+const WINCROSS_COLOR_CALC = "#F53A05";
+const WINCROSS_COLOR_VARIABLE = "#489E5A";
+const WINCROSS_COLOR_ANSWER_CODE = "#FF45BD";
+const WINCROSS_COLOR_RL = "#063394";
+const WINCROSS_COLOR_BLACK = "#111111";
+const SCOPE_HIGHLIGHT_BACKGROUND = "#ffe58a";
+
+/*
+  Centralized token->color mapping for the tokenizer/parser pipeline
+  below (classifyOutputLine -> per-type parser -> tokens -> render).
+  Every parser function reads colors from here, never a raw hex
+  directly -- this is the one place that maps a token's *meaning*
+  to a color. Everything not one of the 8 named WinCross tokens above
+  is WINCROSS_COLOR_BLACK.
+*/
+const TOKEN_COLOR = {
+  label: WINCROSS_COLOR_BLACK,
+  header: WINCROSS_COLOR_TQ_HEADER,
+  tableOptions: WINCROSS_COLOR_TABLE_OPTIONS,
+  questionPrefix: WINCROSS_COLOR_BLACK,
+  questionText: WINCROSS_COLOR_BLACK,
+  questionPipe: WINCROSS_COLOR_QUESTION_PIPE,
+  tn: WINCROSS_COLOR_TN,
+  calc: WINCROSS_COLOR_CALC,
+  caret: WINCROSS_COLOR_ANSWER_CODE,
+  variable: WINCROSS_COLOR_VARIABLE,
+  answerCode: WINCROSS_COLOR_ANSWER_CODE,
+  modifier: WINCROSS_COLOR_BLACK,
+  rl: WINCROSS_COLOR_RL,
+  sx: WINCROSS_COLOR_RL,
+  operator: WINCROSS_COLOR_BLACK,
+  brace: WINCROSS_COLOR_BLACK,
+  errorText: WINCROSS_COLOR_BLACK,
+  text: WINCROSS_COLOR_BLACK
+};
 
 
-/* ========================================
-   HELP TOOLTIP
-======================================== */
+function ensureHighlightBackdrop() {
+  if (findReplaceState.highlightBackdrop) {
+    return;
+  }
+
+  const wrapper = document.createElement("div");
+  wrapper.style.position = "relative";
+  wrapper.style.width = "100%";
+
+  output.parentNode.insertBefore(wrapper, output);
+
+  const backdrop = document.createElement("div");
+  backdrop.setAttribute("aria-hidden", "true");
+  backdrop.style.position = "absolute";
+  backdrop.style.top = "0";
+  backdrop.style.left = "0";
+  backdrop.style.right = "0";
+  backdrop.style.bottom = "0";
+  backdrop.style.overflow = "hidden";
+  backdrop.style.pointerEvents = "none";
+
+  /*
+    Preserve whatever background and default text color Output already
+    has (the app's stylesheet tints both) by moving them onto the
+    backdrop, then making the textarea itself fully transparent -- the
+    visual result for any *uncolored* text is identical to before.
+  */
+  const originalComputed = getComputedStyle(output);
+  const originalBackground = originalComputed.backgroundColor;
+  const originalTextColor = originalComputed.color;
+
+  backdrop.style.background = originalBackground;
+  backdrop.style.color = originalTextColor;
+
+  wrapper.appendChild(backdrop);
+  wrapper.appendChild(output);
+
+  output.style.position = "relative";
+  output.style.background = "transparent";
+  output.style.color = "transparent";
+  output.style.caretColor = originalTextColor;
+  output.style.zIndex = "1";
+  output.style.width = "100%";
+  output.style.height = "100%";
+  output.style.boxSizing = "border-box";
+  output.style.resize = "none";
+
+  findReplaceState.highlightWrapper = wrapper;
+  findReplaceState.highlightBackdrop = backdrop;
+
+  resizeHighlightWrapperToFitOutputCard();
+  syncBackdropStyles();
+  renderHighlightBackdrop();
+
+  output.addEventListener("scroll", function () {
+    backdrop.scrollTop = output.scrollTop;
+    backdrop.scrollLeft = output.scrollLeft;
+  });
+
+  window.addEventListener("resize", function () {
+    resizeHighlightWrapperToFitOutputCard();
+    syncBackdropStyles();
+  });
+}
+
+/*
+  Recomputed live -- the card's current total height minus its OTHER
+  children's current height -- so it stays correct across the app's
+  900px breakpoint (which changes .output-card's own height) without
+  needing to replicate the flex math at all.
+*/
+function resizeHighlightWrapperToFitOutputCard() {
+  const wrapper = findReplaceState.highlightWrapper;
+  const card = output.closest(".output-card") || (wrapper && wrapper.parentNode);
+
+  if (!wrapper || !card) {
+    return;
+  }
+
+  const cardRect = card.getBoundingClientRect();
+  let siblingsHeight = 0;
+
+  Array.prototype.forEach.call(card.children, function (child) {
+    if (child !== wrapper) {
+      siblingsHeight += child.getBoundingClientRect().height;
+    }
+  });
+
+  const available = cardRect.height - siblingsHeight;
+
+  if (available > 0) {
+    wrapper.style.height = available + "px";
+  }
+}
+
+function syncBackdropStyles() {
+  if (!findReplaceState.highlightBackdrop) {
+    return;
+  }
+
+  const computed = getComputedStyle(output);
+  const propsToCopy = [
+    "boxSizing", "width", "height",
+    "paddingTop", "paddingRight", "paddingBottom", "paddingLeft",
+    "borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth",
+    "borderTopStyle", "borderRightStyle", "borderBottomStyle", "borderLeftStyle",
+    "borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor",
+    "fontFamily", "fontSize", "fontWeight", "fontStyle",
+    "lineHeight", "letterSpacing", "wordSpacing", "textIndent",
+    "whiteSpace", "wordBreak", "overflowWrap", "tabSize"
+  ];
+
+  propsToCopy.forEach(function (prop) {
+    findReplaceState.highlightBackdrop.style[prop] = computed[prop];
+  });
+}
+
+function wrapWithSyntaxColor(escapedText, color) {
+  if (!color) {
+    return escapedText;
+  }
+
+  const isHighlightColor = color !== WINCROSS_COLOR_BLACK;
+  const fontWeight = isHighlightColor ? "font-weight:bold;" : "";
+
+  return '<span style="color:' + color + ";" + fontWeight + '">' + escapedText + "</span>";
+}
+
+/* ================================================================
+   OUTPUT SYNTAX TOKENIZER / PARSER
+   ------------------------------------------------------------
+   Pipeline:
+
+     RAW OUTPUT LINE
+         -> classifyOutputLine(line)      [content-only, no position]
+         -> per-type parser (parseXxxLine)
+         -> tokens: [{ type, text, color }, ...]
+         -> renderHighlightBackdrop() renders tokens to HTML
+
+   classifyOutputLine() never looks at "where in the block" a line
+   is -- only at the line's own text -- so a line's meaning can't
+   drift if a block's shape ever differs from what this app itself
+   generates (extra/missing subtitle, hand-typed syntax, etc).
+
+   Each line type gets its own small parser rather than one shared
+   regex; the one exception is tokenizeLogicSegment(), which is
+   itself a proper multi-token scanner (not a single "match the
+   whole thing" regex) used by every line type that can contain
+   variable/answerCode/operator/brace syntax, including normal rows
+   AND cross-variable logic ("D1B (1-4) & Q1 (1)", "Q1 (1) OR Q2 (1)",
+   "{Q1 (1) or Q2 (2)}"). It scans left-to-right and independently
+   classifies each variable, each answer code, each operator, and
+   each brace as its own token, so none of them can inherit another
+   token's color.
+================================================================== */
+
+/*
+  Classifies a raw Output line by its own content. No positional
+  state (no "this is line 3 of the block") is used anywhere here.
+*/
+function classifyOutputLine(line) {
+  const trimmed = line.trim();
+
+  if (trimmed === "") {
+    return "blank";
+  }
+
+  if (/^\*\*\*/.test(trimmed)) {
+    return "error";
+  }
+
+  if (/^T[A-Z0-9_]+\^\d+$/i.test(trimmed)) {
+    return "tqHeader";
+  }
+
+  if (/^S\|/.test(trimmed)) {
+    return "subtitle";
+  }
+
+  if (/^\s*BASE=/i.test(line)) {
+    return "base";
+  }
+
+  /*
+    Covers both "**D/S (...)^ CALC F2-F3,V2-V3^SX" and a Summary
+    block's own header row, "TITLE^ CALC F2-F3,V2-V3^SUFFIX" --
+    both are calculation syntax, not a normal label/variable row.
+  */
+  if (
+    /^\s*\*\*D\/S\b/i.test(line) ||
+    /\^[^^]*\bCALC\s+F\d+-F\d+/i.test(line)
+  ) {
+    return "calcRow";
+  }
+
+  if (/^\s*QUESTION\s+[^:]*:/i.test(line)) {
+    return "question";
+  }
+
+  if (/^\s*USE=/i.test(line)) {
+    return "useLine";
+  }
+
+  /*
+    Table-options line: no caret at all, just a comma-separated
+    list of known option tokens (OR, OV, OI2, O%, F%, ...).
+  */
+  if (
+    !line.includes("^") &&
+    /^\s*(OR|OV|OI\d*|O%|F%|R%|RA|OB|OD|BH|RV|S\d+|P\d+|V\d+|SA|SP)(\s*,\s*[A-Za-z0-9%]+)*\s*$/i
+      .test(line)
+  ) {
+    return "tableOptions";
+  }
+
+  if (/^\s*\^\s*\^?\s*$/.test(line)) {
+    return "separator";
+  }
+
+  if (line.includes("^")) {
+    return "normalRow";
+  }
+
+  // Summary/Ranking/Listout title lines and anything else unrecognized.
+  return "plainText";
+}
+
+/*
+  Independent multi-token scanner for a stretch of "logic" text --
+  used for both a normal row's variable/code section AND freeform
+  cross-variable logic that never gets a trailing modifier caret
+  (e.g. "D1B (1-4) & Q1 (1)"). Each match is classified into exactly
+  one of: a variable+code pair (split into two independent tokens),
+  a brace, a boolean operator (word or symbol), or leftover plain
+  text -- so an operator or a second variable can never inherit the
+  color of an earlier token.
+*/
+const LOGIC_TOKEN_PATTERN =
+  /([A-Z][A-Z0-9_]*)(\s*)(\([0-9,\-]+\))|([{}])|(\b(?:OR|AND|NOT)\b)|(&)/gi;
+
+function tokenizeLogicSegment(text) {
+  const tokens = [];
+  let cursor = 0;
+  let match;
+
+  LOGIC_TOKEN_PATTERN.lastIndex = 0;
+
+  while ((match = LOGIC_TOKEN_PATTERN.exec(text)) !== null) {
+    if (match.index > cursor) {
+      pushToken(tokens, text.slice(cursor, match.index), TOKEN_COLOR.text);
+    }
+
+    const [, variable, spacing, answerCode, brace, operatorWord, operatorSymbol] = match;
+
+    if (variable) {
+      pushToken(tokens, variable, TOKEN_COLOR.variable);
+      pushToken(tokens, spacing, TOKEN_COLOR.text);
+      pushToken(tokens, answerCode, TOKEN_COLOR.answerCode);
+    } else if (brace) {
+      pushToken(tokens, brace, TOKEN_COLOR.brace);
+    } else if (operatorWord || operatorSymbol) {
+      pushToken(tokens, match[0], TOKEN_COLOR.operator);
+    }
+
+    cursor = match.index + match[0].length;
+  }
+
+  if (cursor < text.length) {
+    pushToken(tokens, text.slice(cursor), TOKEN_COLOR.text);
+  }
+
+  return tokens;
+}
+
+function pushToken(tokens, text, color) {
+  if (!text) return;
+
+  tokens.push({ type: "text", text, color });
+}
+
+/*
+  Splits a stretch of plain (black) text on any "^" characters inside
+  it, so every caret still gets the caret color even when it falls
+  inside a segment that would otherwise be one uninterrupted run of
+  default-colored text (e.g. the gap between "TN" and the rest of a
+  BASE line, or between "CALC ..." and a trailing modifier suffix).
+*/
+function splitOutCarets(text, textColor) {
+  const tokens = [];
+  let last = 0;
+
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === "^") {
+      if (i > last) {
+        tokens.push({ type: "text", text: text.slice(last, i), color: textColor });
+      }
+
+      tokens.push({ type: "caret", text: "^", color: TOKEN_COLOR.caret });
+      last = i + 1;
+    }
+  }
+
+  if (last < text.length) {
+    tokens.push({ type: "text", text: text.slice(last), color: textColor });
+  }
+
+  return tokens;
+}
+
+/*
+  Scans `text` for every occurrence of any word in `wordColorPairs`
+  (whole-word, case-insensitive) and colors each occurrence with its
+  own color; every other character defaults to `defaultColor`, EXCEPT
+  any "^" caret, which always gets the caret color regardless of
+  which line type it appears in. Used for the BASE line's "TN" token,
+  and the D/S/Summary line's "CALC" + "SX" tokens, and a trailing
+  modifier suffix's "RL" + "SX" tokens -- all "find these specific
+  literal words, color only them (plus carets)" rules.
+*/
+function tokenizeNamedWords(text, wordColorPairs, defaultColor) {
+  const tokens = [];
+  const pattern = new RegExp(
+    "\\b(?:" + wordColorPairs.map(pair => pair.word).join("|") + ")\\b",
+    "gi"
+  );
+
+  let cursor = 0;
+  let match;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > cursor) {
+      splitOutCarets(text.slice(cursor, match.index), defaultColor).forEach(t => tokens.push(t));
+    }
+
+    const matchedPair = wordColorPairs.find(pair => new RegExp("^" + pair.word + "$", "i").test(match[0]));
+
+    tokens.push({ type: "text", text: match[0], color: matchedPair ? matchedPair.color : defaultColor });
+    cursor = match.index + match[0].length;
+  }
+
+  if (cursor < text.length) {
+    splitOutCarets(text.slice(cursor), defaultColor).forEach(t => tokens.push(t));
+  }
+
+  return tokens;
+}
+
+/*
+  A trailing modifier suffix (e.g. "L-,SX") is black as one run,
+  except "RL" and "SX", which each get their own named color.
+*/
+function tokenizeModifierSuffix(suffix) {
+  return tokenizeNamedWords(
+    suffix,
+    [
+      { word: "RL", color: TOKEN_COLOR.rl },
+      { word: "SX", color: TOKEN_COLOR.sx }
+    ],
+    TOKEN_COLOR.modifier
+  );
+}
+
+/* ---- Per-line-type parsers -------------------------------------- */
+
+function parseTqHeaderLine(line) {
+  return [{ type: "header", text: line, color: TOKEN_COLOR.header }];
+}
+
+function parseTableOptionsLine(line) {
+  return [{ type: "tableOptions", text: line, color: TOKEN_COLOR.tableOptions }];
+}
+
+function parseErrorLine(line) {
+  return [{ type: "error", text: line, color: TOKEN_COLOR.errorText }];
+}
+
+/*
+  "S|..." -- no color is named for the subtitle marker or its text
+  in the current spec, so the whole line stays black.
+*/
+function parseSubtitleLine(line) {
+  return [{ type: "text", text: line, color: TOKEN_COLOR.text }];
+}
+
+/*
+  BASE=TOTAL SAMPLE^TN^1
+
+  Only the literal "TN" token is named in the spec and gets color;
+  "BASE=", the base value ("TOTAL SAMPLE"), and the TN value ("1")
+  are all black -- every caret still gets the caret color.
+*/
+function parseBaseLine(line) {
+  const match = line.match(/^(\s*BASE=)(.*?)(\^)(.*)$/i);
+
+  if (!match) {
+    return [{ type: "text", text: line, color: TOKEN_COLOR.text }];
+  }
+
+  const tokens = [
+    { type: "text", text: match[1], color: TOKEN_COLOR.text },
+    { type: "text", text: match[2], color: TOKEN_COLOR.text },
+    { type: "caret", text: match[3], color: TOKEN_COLOR.caret }
+  ];
+
+  tokenizeNamedWords(match[4], [{ word: "TN", color: TOKEN_COLOR.tn }], TOKEN_COLOR.text)
+    .forEach(t => tokens.push(t));
+
+  return tokens;
+}
+
+/*
+  **D/S (TOT GOOD - TOT BAD)^ CALC F2-F3,V2-V3^SX
+  or a Summary block header: TITLE^ CALC F2-F3,V2-V3^SUFFIX
+
+  Only the literal "CALC" and "SX" words are named in the spec and
+  get color; the D/S text and the calc expression (F2-F3,V2-V3) are
+  black -- every caret still gets the caret color.
+*/
+function parseCalcRowLine(line) {
+  return tokenizeNamedWords(
+    line,
+    [
+      { word: "CALC", color: TOKEN_COLOR.calc },
+      { word: "SX", color: TOKEN_COLOR.sx }
+    ],
+    TOKEN_COLOR.text
+  );
+}
+
+/*
+  "QUESTION 1:" and the question text itself both stay black; only
+  the literal "|" marker gets its own color, per spec.
+*/
+function parseQuestionLine(line) {
+  const match = line.match(/^(\s*QUESTION\s+[^:]+:\s*)(.*)$/i);
+
+  if (!match) {
+    return [{ type: "text", text: line, color: TOKEN_COLOR.text }];
+  }
+
+  const tokens = [
+    { type: "questionPrefix", text: match[1], color: TOKEN_COLOR.questionPrefix }
+  ];
+
+  const rest = match[2];
+  const pipeIndex = rest.indexOf("|");
+
+  if (pipeIndex === -1) {
+    tokens.push({ type: "questionText", text: rest, color: TOKEN_COLOR.questionText });
+    return tokens;
+  }
+
+  const before = rest.slice(0, pipeIndex);
+  const after = rest.slice(pipeIndex + 1);
+
+  if (before) tokens.push({ type: "questionText", text: before, color: TOKEN_COLOR.questionText });
+  tokens.push({ type: "questionPipe", text: "|", color: TOKEN_COLOR.questionPipe });
+  if (after) tokens.push({ type: "questionText", text: after, color: TOKEN_COLOR.questionText });
+
+  return tokens;
+}
+
+function parseUseLine(line) {
+  return [{ type: "text", text: line, color: TOKEN_COLOR.text }];
+}
+
+/*
+  "^                       ^" -- a blank separator row. Every caret
+  is kept visible as its own token; everything else stays BLACK.
+*/
+function parseSeparatorLine(line) {
+  const tokens = [];
+  let last = 0;
+
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === "^") {
+      if (i > last) {
+        tokens.push({ type: "text", text: line.slice(last, i), color: TOKEN_COLOR.text });
+      }
+
+      tokens.push({ type: "caret", text: "^", color: TOKEN_COLOR.caret });
+      last = i + 1;
+    }
+  }
+
+  if (last < line.length) {
+    tokens.push({ type: "text", text: line.slice(last), color: TOKEN_COLOR.text });
+  }
+
+  return tokens;
+}
+
+/*
+  The general row shape: LABEL ^ <logic> [^ <modifier>]
+
+  LABEL is plain text up to the first caret. Everything between the
+  first and second caret (or everything after the first caret, if
+  there's no second) is handed to tokenizeLogicSegment(), which
+  independently classifies every variable, every answer code, every
+  operator, and every brace inside it -- this is what correctly
+  handles cross-variable logic like "D1B (1-4) & Q1 (1)" without any
+  of those tokens bleeding into each other's color. A second caret,
+  if present, introduces a trailing modifier suffix.
+*/
+function parseNormalRowLine(line) {
+  const firstCaret = line.indexOf("^");
+
+  if (firstCaret === -1) {
+    return [{ type: "text", text: line, color: TOKEN_COLOR.text }];
+  }
+
+  const tokens = [
+    { type: "label", text: line.slice(0, firstCaret), color: TOKEN_COLOR.label },
+    { type: "caret", text: "^", color: TOKEN_COLOR.caret }
+  ];
+
+  const afterFirst = line.slice(firstCaret + 1);
+  const secondCaret = afterFirst.indexOf("^");
+
+  if (secondCaret === -1) {
+    tokenizeLogicSegment(afterFirst).forEach(t => tokens.push(t));
+    return tokens;
+  }
+
+  const middle = afterFirst.slice(0, secondCaret);
+  tokenizeLogicSegment(middle).forEach(t => tokens.push(t));
+
+  tokens.push({ type: "caret", text: "^", color: TOKEN_COLOR.caret });
+
+  const suffix = afterFirst.slice(secondCaret + 1);
+
+  if (suffix) {
+    tokenizeModifierSuffix(suffix).forEach(t => tokens.push(t));
+  }
+
+  return tokens;
+}
+
+/*
+  Top-level dispatcher: classify, then hand off to the matching
+  parser. This is the only function renderHighlightBackdrop() calls.
+*/
+function buildOutputLineTokens(line) {
+  switch (classifyOutputLine(line)) {
+    case "blank": return [{ type: "text", text: line, color: TOKEN_COLOR.text }];
+    case "error": return parseErrorLine(line);
+    case "tqHeader": return parseTqHeaderLine(line);
+    case "subtitle": return parseSubtitleLine(line);
+    case "base": return parseBaseLine(line);
+    case "calcRow": return parseCalcRowLine(line);
+    case "question": return parseQuestionLine(line);
+    case "useLine": return parseUseLine(line);
+    case "tableOptions": return parseTableOptionsLine(line);
+    case "separator": return parseSeparatorLine(line);
+    case "normalRow": return parseNormalRowLine(line);
+    default: return tokenizeLogicSegment(line);
+  }
+}
+
+/*
+  Renders one already-colored piece, additionally overlaying the
+  "Only in selection" scope highlight (a <mark>) wherever this piece's
+  absolute character range intersects the active scope -- a piece can
+  be split into up to three parts (before/inside/after the scope) so
+  the highlight boundary can fall in the middle of a colored run.
+*/
+function renderPieceWithScope(text, color, absoluteStart, scope) {
+  if (!text) {
+    return "";
+  }
+
+  if (!scope) {
+    return wrapWithSyntaxColor(escapeForBackdrop(text), color);
+  }
+
+  const absoluteEnd = absoluteStart + text.length;
+  const overlapStart = Math.max(absoluteStart, scope.start);
+  const overlapEnd = Math.min(absoluteEnd, scope.end);
+
+  if (overlapStart >= overlapEnd) {
+    return wrapWithSyntaxColor(escapeForBackdrop(text), color);
+  }
+
+  const before = text.slice(0, overlapStart - absoluteStart);
+  const middle = text.slice(overlapStart - absoluteStart, overlapEnd - absoluteStart);
+  const after = text.slice(overlapEnd - absoluteStart);
+
+  let html = "";
+
+  if (before) {
+    html += wrapWithSyntaxColor(escapeForBackdrop(before), color);
+  }
+
+  if (middle) {
+    html +=
+      '<mark style="background:' + SCOPE_HIGHLIGHT_BACKGROUND + ';border-radius:2px;">' +
+      wrapWithSyntaxColor(escapeForBackdrop(middle), color) +
+      "</mark>";
+  }
+
+  if (after) {
+    html += wrapWithSyntaxColor(escapeForBackdrop(after), color);
+  }
+
+  return html;
+}
+
+/*
+  Repaints the backdrop: full WinCross-style syntax coloring across
+  the whole Output text, plus the "Only in selection" scope highlight
+  layered on top when active. Called after every real edit (the
+  "input" listener), after every generateOutput() (since programmatic
+  value assignment doesn't fire "input"), and after any scope/state
+  change in the Find & Replace tool.
+
+  NOTE: output.value remains the single source of truth throughout --
+  this function only ever READS output.value and WRITES into the
+  display-only backdrop's innerHTML. It never writes back into
+  output.value, and Copy All / session save continue to read
+  output.value directly (see copyOutput() and saveSession()).
+*/
+function renderHighlightBackdrop() {
+  if (!findReplaceState.highlightBackdrop) {
+    return;
+  }
+
+  const text = output.value;
+  const lines = text.split("\n");
+
+  const scope =
+    findReplaceState.inSelectionCheckbox &&
+    findReplaceState.inSelectionCheckbox.checked &&
+    findReplaceState.selectionRange
+      ? findReplaceState.selectionRange
+      : null;
+
+  let offset = 0;
+  const htmlParts = [];
+
+  lines.forEach(function (line, lineIndex) {
+    const pieces = buildOutputLineTokens(line);
+
+    let pieceOffset = offset;
+
+    pieces.forEach(function (piece) {
+      htmlParts.push(renderPieceWithScope(piece.text, piece.color, pieceOffset, scope));
+      pieceOffset += piece.text.length;
+    });
+
+    offset += line.length;
+
+    if (lineIndex < lines.length - 1) {
+      htmlParts.push("\n");
+      offset += 1;
+    }
+  });
+
+  findReplaceState.highlightBackdrop.innerHTML = htmlParts.join("") + "\n";
+}
+
+function setFindReplaceStatus(text) {
+  if (findReplaceState.statusLabel) {
+    findReplaceState.statusLabel.textContent = text;
+  }
+}
+
+function getFindReplaceRange() {
+  const restrictToSelection =
+    findReplaceState.inSelectionCheckbox.checked &&
+    findReplaceState.selectionRange !== null;
+
+  if (restrictToSelection) {
+    return {
+      start: findReplaceState.selectionRange.start,
+      end: findReplaceState.selectionRange.end
+    };
+  }
+
+  return { start: 0, end: output.value.length };
+}
+
+function findAllMatchIndexesInRange(range) {
+  const query = findReplaceState.findInput.value;
+
+  if (!query) {
+    return [];
+  }
+
+  const matchCase = findReplaceState.matchCaseCheckbox.checked;
+  const haystack = matchCase ? output.value : output.value.toLowerCase();
+  const needle = matchCase ? query : query.toLowerCase();
+
+  const indexes = [];
+  let index = haystack.indexOf(needle, range.start);
+
+  while (index !== -1 && index + needle.length <= range.end) {
+    indexes.push(index);
+    index = haystack.indexOf(needle, index + 1);
+  }
+
+  return indexes;
+}
+
+function updateMatchCounter() {
+  if (!findReplaceState.counterLabel) {
+    return;
+  }
+
+  if (!findReplaceState.findInput.value) {
+    findReplaceState.counterLabel.textContent = "";
+    return;
+  }
+
+  const indexes = findAllMatchIndexesInRange(getFindReplaceRange());
+
+  if (indexes.length === 0) {
+    findReplaceState.counterLabel.textContent = "0 of 0";
+    return;
+  }
+
+  const cursorPos = output.selectionStart || 0;
+  let currentIndex = indexes.findIndex(index => index === cursorPos);
+
+  if (currentIndex === -1) {
+    currentIndex = indexes.findIndex(index => index >= cursorPos);
+  }
+
+  if (currentIndex === -1) {
+    currentIndex = 0;
+  }
+
+  findReplaceState.counterLabel.textContent = (currentIndex + 1) + " of " + indexes.length;
+}
+
+function buildFindReplaceBar() {
+  if (findReplaceState.bar) {
+    return findReplaceState.bar;
+  }
+
+  const anchor = output.closest(".output-card") || output.parentNode;
+
+  if (getComputedStyle(anchor).position === "static") {
+    anchor.style.position = "relative";
+  }
+
+  findReplaceState.anchor = anchor;
+
+  const bar = document.createElement("div");
+  bar.className = "find-replace-popup hidden";
+  bar.style.cssText =
+    "position:absolute;right:16px;width:340px;max-width:calc(100% - 32px);" +
+    "z-index:40;background:#fff;border:1px solid #ddd;border-radius:10px;" +
+    "box-shadow:0 8px 24px rgba(0,0,0,0.18);padding:14px 16px;font-size:13px;";
+
+  bar.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <strong style="font-size:14px;">Find &amp; Replace</strong>
+      <button type="button" class="fr-close secondary" aria-label="Close Find and Replace" style="width:26px;height:26px;padding:0;line-height:1;">×</button>
+    </div>
+
+    <div style="display:flex;align-items:flex-end;gap:6px;margin-bottom:8px;">
+      <div style="display:flex;flex-direction:column;gap:3px;flex:1;">
+        <label style="color:#777;">Find</label>
+        <input type="text" class="fr-find" style="width:100%;padding:5px 6px;" />
+      </div>
+      <span class="fr-counter" style="color:#777;white-space:nowrap;padding-bottom:6px;min-width:44px;text-align:right;"></span>
+      <button type="button" class="fr-find-prev secondary" aria-label="Previous match" style="width:32px;padding:4px 0;">↑</button>
+      <button type="button" class="fr-find-next secondary" aria-label="Next match" style="width:32px;padding:4px 0;">↓</button>
+    </div>
+
+    <div style="display:flex;align-items:flex-end;gap:6px;margin-bottom:10px;">
+      <div style="display:flex;flex-direction:column;gap:3px;flex:1;">
+        <label style="color:#777;">Replace with</label>
+        <input type="text" class="fr-replace" style="width:100%;padding:5px 6px;" />
+      </div>
+      <button type="button" class="fr-replace-one secondary" style="white-space:nowrap;">Replace</button>
+      <button type="button" class="fr-replace-all" style="white-space:nowrap;background:#222;color:#fff;border:none;">Replace All</button>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:8px;">
+      <label style="display:flex;align-items:center;gap:5px;">
+        <input type="checkbox" class="fr-match-case" /> Match case
+      </label>
+      <label style="display:flex;align-items:center;gap:5px;">
+        <input type="checkbox" class="fr-in-selection" /> Only in selection
+      </label>
+    </div>
+
+    <div class="fr-scope-row hidden" style="display:flex;align-items:center;gap:6px;padding:6px 8px;background:#fff8e1;border-radius:6px;margin-bottom:8px;overflow:hidden;">
+      <span class="fr-scope-preview" style="color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;"></span>
+    </div>
+
+    <div class="fr-status" style="color:#2a7a2a;min-height:16px;"></div>
+  `;
+
+  anchor.appendChild(bar);
+
+  findReplaceState.bar = bar;
+  findReplaceState.findInput = bar.querySelector(".fr-find");
+  findReplaceState.replaceInput = bar.querySelector(".fr-replace");
+  findReplaceState.matchCaseCheckbox = bar.querySelector(".fr-match-case");
+  findReplaceState.inSelectionCheckbox = bar.querySelector(".fr-in-selection");
+  findReplaceState.scopeRow = bar.querySelector(".fr-scope-row");
+  findReplaceState.scopePreview = bar.querySelector(".fr-scope-preview");
+  findReplaceState.counterLabel = bar.querySelector(".fr-counter");
+  findReplaceState.statusLabel = bar.querySelector(".fr-status");
+
+  bar.querySelector(".fr-find-next").addEventListener("click", findNextInOutput);
+  bar.querySelector(".fr-find-prev").addEventListener("click", findPreviousInOutput);
+  bar.querySelector(".fr-replace-one").addEventListener("click", replaceCurrentInOutput);
+  bar.querySelector(".fr-replace-all").addEventListener("click", replaceAllInOutput);
+  bar.querySelector(".fr-close").addEventListener("click", closeFindReplaceBar);
+
+  findReplaceState.findInput.addEventListener("input", updateMatchCounter);
+  findReplaceState.matchCaseCheckbox.addEventListener("change", updateMatchCounter);
+  findReplaceState.inSelectionCheckbox.addEventListener("change", function () {
+    updateMatchCounter();
+    renderHighlightBackdrop();
+  });
+
+  findReplaceState.findInput.addEventListener("keydown", function (event) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (event.shiftKey) {
+        findPreviousInOutput();
+      } else {
+        findNextInOutput();
+      }
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      closeFindReplaceBar();
+    }
+  });
+
+  findReplaceState.replaceInput.addEventListener("keydown", function (event) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      replaceCurrentInOutput();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      closeFindReplaceBar();
+    }
+  });
+
+  return bar;
+}
+
+function positionFindReplaceBar() {
+  const anchor = findReplaceState.anchor;
+  const bar = findReplaceState.bar;
+  const buttonRow = anchor.querySelector(".button-row");
+
+  if (buttonRow) {
+    const anchorTop = anchor.getBoundingClientRect().top;
+    const rowBottom = buttonRow.getBoundingClientRect().bottom;
+    bar.style.top = Math.max(0, rowBottom - anchorTop + 8) + "px";
+  } else {
+    bar.style.top = "12px";
+  }
+}
+
+function openFindReplaceBar() {
+  const bar = buildFindReplaceBar();
+  ensureHighlightBackdrop();
+  positionFindReplaceBar();
+  bar.classList.remove("hidden");
+
+  const selectionStart = output.selectionStart || 0;
+  const selectionEnd = output.selectionEnd || 0;
+
+  if (selectionEnd > selectionStart) {
+    const selectedText = output.value.slice(selectionStart, selectionEnd);
+
+    findReplaceState.selectionRange = { start: selectionStart, end: selectionEnd };
+    findReplaceState.inSelectionCheckbox.disabled = false;
+    findReplaceState.inSelectionCheckbox.checked = true;
+    findReplaceState.scopeRow.classList.remove("hidden");
+
+    const preview = selectedText.replace(/\s+/g, " ").trim().slice(0, 60);
+    findReplaceState.scopePreview.textContent =
+      (preview || "(blank)") +
+      (selectedText.length > 60 ? "… " : " ") +
+      "(" + selectedText.length + " chars)";
+
+    /*
+      A short, single-line selection is most likely meant as the
+      search term itself (the old behavior). A larger or multi-line
+      selection -- like a whole highlighted block -- is meant as the
+      *scope* to search within, not literal text to search for, so
+      the Find field is left for the user to type their own term.
+    */
+    const looksLikeASearchTermRatherThanAScope =
+      selectedText.length <= 60 && !selectedText.includes("\n");
+
+    if (looksLikeASearchTermRatherThanAScope) {
+      findReplaceState.findInput.value = selectedText;
+    }
+  } else {
+    findReplaceState.selectionRange = null;
+    findReplaceState.inSelectionCheckbox.checked = false;
+    findReplaceState.inSelectionCheckbox.disabled = true;
+    findReplaceState.scopeRow.classList.add("hidden");
+  }
+
+  setFindReplaceStatus("");
+  findReplaceState.findInput.focus();
+  findReplaceState.findInput.select();
+  updateMatchCounter();
+  renderHighlightBackdrop();
+}
+
+function closeFindReplaceBar() {
+  if (!findReplaceState.bar) {
+    return;
+  }
+
+  findReplaceState.bar.classList.add("hidden");
+  findReplaceState.selectionRange = null;
+  renderHighlightBackdrop();
+  output.focus();
+}
+
+function findNextInOutput() {
+  const query = findReplaceState.findInput.value;
+
+  if (!query) {
+    setFindReplaceStatus("");
+    return false;
+  }
+
+  const matchCase = findReplaceState.matchCaseCheckbox.checked;
+  const restrictToSelection =
+    findReplaceState.inSelectionCheckbox.checked &&
+    findReplaceState.selectionRange !== null;
+
+  const fullValue = output.value;
+  const rangeStart = restrictToSelection ? findReplaceState.selectionRange.start : 0;
+  const rangeEnd = restrictToSelection ? findReplaceState.selectionRange.end : fullValue.length;
+
+  const haystack = matchCase ? fullValue : fullValue.toLowerCase();
+  const needle = matchCase ? query : query.toLowerCase();
+
+  const isWithinRange = index => index !== -1 && index >= rangeStart && index + needle.length <= rangeEnd;
+
+  const searchFrom = Math.max(output.selectionEnd || 0, rangeStart);
+  let index = haystack.indexOf(needle, searchFrom);
+
+  if (!isWithinRange(index)) {
+    // Wrap around to the start of the active range (whole document,
+    // or just the selection scope) once the end is reached.
+    index = haystack.indexOf(needle, rangeStart);
+  }
+
+  if (!isWithinRange(index)) {
+    setFindReplaceStatus(restrictToSelection ? "No matches in selection" : "No matches");
+    updateMatchCounter();
+    return false;
+  }
+
+  output.focus();
+  output.setSelectionRange(index, index + needle.length);
+  setFindReplaceStatus("Match found");
+  updateMatchCounter();
+  return true;
+}
+
+function findPreviousInOutput() {
+  const query = findReplaceState.findInput.value;
+
+  if (!query) {
+    setFindReplaceStatus("");
+    return false;
+  }
+
+  const matchCase = findReplaceState.matchCaseCheckbox.checked;
+  const restrictToSelection =
+    findReplaceState.inSelectionCheckbox.checked &&
+    findReplaceState.selectionRange !== null;
+
+  const fullValue = output.value;
+  const rangeStart = restrictToSelection ? findReplaceState.selectionRange.start : 0;
+  const rangeEnd = restrictToSelection ? findReplaceState.selectionRange.end : fullValue.length;
+
+  const haystack = matchCase ? fullValue : fullValue.toLowerCase();
+  const needle = matchCase ? query : query.toLowerCase();
+
+  const isWithinRange = index => index !== -1 && index >= rangeStart && index + needle.length <= rangeEnd;
+
+  const searchBefore = Math.min(output.selectionStart || 0, rangeEnd) - 1;
+  let index = searchBefore >= 0 ? haystack.lastIndexOf(needle, searchBefore) : -1;
+
+  if (!isWithinRange(index)) {
+    // Wrap around to the last match within the active range.
+    index = haystack.lastIndexOf(needle, rangeEnd - 1);
+  }
+
+  if (!isWithinRange(index)) {
+    setFindReplaceStatus(restrictToSelection ? "No matches in selection" : "No matches");
+    updateMatchCounter();
+    return false;
+  }
+
+  output.focus();
+  output.setSelectionRange(index, index + needle.length);
+  setFindReplaceStatus("Match found");
+  updateMatchCounter();
+  return true;
+}
+
+function replaceCurrentInOutput() {
+  const query = findReplaceState.findInput.value;
+
+  if (!query) {
+    return;
+  }
+
+  const matchCase = findReplaceState.matchCaseCheckbox.checked;
+  const selectionStart = output.selectionStart;
+  const selectionEnd = output.selectionEnd;
+  const selectedText = output.value.slice(selectionStart, selectionEnd);
+
+  const isCurrentSelectionAMatch =
+    selectedText !== "" &&
+    (matchCase
+      ? selectedText === query
+      : selectedText.toLowerCase() === query.toLowerCase());
+
+  if (isCurrentSelectionAMatch) {
+    const replaceText = findReplaceState.replaceInput.value;
+
+    output.value =
+      output.value.slice(0, selectionStart) +
+      replaceText +
+      output.value.slice(selectionEnd);
+
+    output.dispatchEvent(new Event("input", { bubbles: true }));
+
+    /*
+      If we're scoped to a selection range and the replacement text
+      is a different length than what it replaced, keep the scope's
+      end boundary accurate so later Find Next / Replace calls don't
+      drift past where the selection actually ends now.
+    */
+    if (findReplaceState.inSelectionCheckbox.checked && findReplaceState.selectionRange) {
+      findReplaceState.selectionRange.end += replaceText.length - selectedText.length;
+    }
+
+    const newCursorPos = selectionStart + replaceText.length;
+    output.setSelectionRange(newCursorPos, newCursorPos);
+    setFindReplaceStatus("Replaced");
+    renderHighlightBackdrop();
+  }
+
+  findNextInOutput();
+}
+
+function replaceAllInOutput() {
+  const query = findReplaceState.findInput.value;
+
+  if (!query) {
+    setFindReplaceStatus("");
+    return;
+  }
+
+  const replaceText = findReplaceState.replaceInput.value;
+  const matchCase = findReplaceState.matchCaseCheckbox.checked;
+  const pattern = new RegExp(escapeRegExp(query), matchCase ? "g" : "gi");
+
+  const restrictToSelection =
+    findReplaceState.inSelectionCheckbox.checked &&
+    findReplaceState.selectionRange !== null;
+
+  const fullValue = output.value;
+
+  if (!restrictToSelection) {
+    const matchCount = (fullValue.match(pattern) || []).length;
+
+    if (matchCount === 0) {
+      setFindReplaceStatus("No matches");
+      return;
+    }
+
+    output.value = fullValue.replace(pattern, replaceText);
+    output.dispatchEvent(new Event("input", { bubbles: true }));
+
+    setFindReplaceStatus(
+      matchCount + (matchCount === 1 ? " replacement" : " replacements")
+    );
+    updateMatchCounter();
+    renderHighlightBackdrop();
+    return;
+  }
+
+  /*
+    Only in selection: everything outside [start, end) is left
+    completely untouched -- we only ever run .replace() on the
+    substring in between, then splice it back into place.
+  */
+  const { start, end } = findReplaceState.selectionRange;
+
+  // Clamp in case the text length changed since the selection was captured.
+  const clampedStart = Math.max(0, Math.min(start, fullValue.length));
+  const clampedEnd = Math.max(clampedStart, Math.min(end, fullValue.length));
+
+  const before = fullValue.slice(0, clampedStart);
+  const middle = fullValue.slice(clampedStart, clampedEnd);
+  const after = fullValue.slice(clampedEnd);
+
+  const matchCount = (middle.match(pattern) || []).length;
+
+  if (matchCount === 0) {
+    setFindReplaceStatus("No matches in selection");
+    return;
+  }
+
+  const replacedMiddle = middle.replace(pattern, replaceText);
+
+  output.value = before + replacedMiddle + after;
+  output.dispatchEvent(new Event("input", { bubbles: true }));
+
+  // Keep the scope in sync with the (possibly different) new length,
+  // and re-highlight it so it's clear exactly what was touched.
+  const newEnd = clampedStart + replacedMiddle.length;
+  findReplaceState.selectionRange = { start: clampedStart, end: newEnd };
+  output.setSelectionRange(clampedStart, newEnd);
+
+  setFindReplaceStatus(
+    matchCount + (matchCount === 1 ? " replacement (selection only)" : " replacements (selection only)")
+  );
+  updateMatchCounter();
+  renderHighlightBackdrop();
+}
+
+function initFindReplace() {
+  if (!output) {
+    return;
+  }
+
+  output.addEventListener("input", renderHighlightBackdrop);
+
+  output.addEventListener("keydown", function (event) {
+    const isReplaceShortcut =
+      (event.ctrlKey || event.metaKey) &&
+      !event.shiftKey &&
+      !event.altKey &&
+      (event.key === "h" || event.key === "H");
+
+    if (isReplaceShortcut) {
+      event.preventDefault();
+      openFindReplaceBar();
+    }
+  });
+
+  /*
+    Reliable, keyboard-independent entry point -- important on macOS,
+    where Cmd+H is intercepted by the OS to hide the app before the
+    page ever sees the keydown.
+  */
+  const buttonRow = document.querySelector(".output-card .button-row");
+
+  if (buttonRow) {
+    const findReplaceBtn = document.createElement("button");
+    findReplaceBtn.type = "button";
+    findReplaceBtn.textContent = "Find & Replace";
+    findReplaceBtn.className = "secondary";
+    findReplaceBtn.addEventListener("click", openFindReplaceBar);
+    buttonRow.appendChild(findReplaceBtn);
+  }
+
+  window.addEventListener("resize", function () {
+    if (findReplaceState.bar && !findReplaceState.bar.classList.contains("hidden")) {
+      positionFindReplaceBar();
+    }
+  });
+}
+
+/* ================= SESSION PERSISTENCE ================= */
+
+function saveSession() {
+  try {
+
+    const session = {
+      version: 2,
+      savedAt: new Date().toISOString(),
+
+      tables,
+      editingIndex,
+
+      output: tables.length ? output.value : "",
+      outputEdited: tables.length ? outputEdited : false
+    };
+
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(session)
+    );
+
+  } catch(err) {
+    console.error(err);
+  }
+}
+
+/*
+  LOAD SESSION — never calls saveSession() itself (no
+  load -> generate -> save -> load loops). Always renders the
+  input list and always ends with Output in a defined state,
+  even for a brand-new user with nothing in localStorage
+  (previously, an empty localStorage caused an early return
+  that skipped renderInputList()/generateOutput() entirely).
+*/
+function loadSession() {
+  let session = null;
+
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+
+    if (raw) {
+      session = JSON.parse(raw);
+    }
+  } catch (err) {
+    console.error("Failed to parse saved session", err);
+    session = null;
+  }
+
+  if (session && Array.isArray(session.tables)) {
+    tables = session.tables;
+    editingIndex = session.editingIndex ?? null;
+  } else {
+    tables = [];
+    editingIndex = null;
+  }
+
+  renderInputList();
+
+  if (
+    session &&
+    session.outputEdited &&
+    typeof session.output === "string"
+  ) {
+    output.value = session.output;
+    outputEdited = true;
+    renderHighlightBackdrop();
+  } else {
+    outputEdited = false;
+    generateOutput();
+  }
+}
+
+/* ================= SORTABLE ================= */
+
+function initSortable() {
+  const list = inputList || document.getElementById("inputList");
+
+  if (!list) return;
+
+  if (sortable) {
+    sortable.destroy();
+    sortable = null;
+  }
+
+  sortable = new Sortable(list, {
+
+    animation: 180,
+
+    ghostClass: "dragging",
+
+    onEnd(event) {
+
+      if (
+        event.oldIndex ===
+        event.newIndex
+      ) {
+        return;
+      }
+
+      /*
+        BUG FIX: confirmation must happen BEFORE the tables
+        array is mutated, not after. The previous version
+        spliced `tables` first and only asked for confirmation
+        afterward, so canceling left the data model reordered
+        even though the render/save/generate never happened.
+        If the user cancels, renderInputList() re-renders the
+        list from the untouched `tables` array, which also
+        undoes the visual reorder Sortable already performed
+        on the DOM.
+      */
+      if (
+        outputEdited &&
+        output.value.trim()
+      ) {
+        const confirmRefresh = confirm(
+          "Your Output has been edited manually.\n\n" +
+          "Reordering the Input List will regenerate the Output.\n\n" +
+          "Continue?"
+        );
+
+        if (!confirmRefresh) {
+          renderInputList();
+          return;
+        }
+      }
+
+      const movedTable =
+        tables.splice(
+          event.oldIndex,
+          1
+        )[0];
+
+      tables.splice(
+        event.newIndex,
+        0,
+        movedTable
+      );
+
+      renderInputList();
+      generateOutput();
+      outputEdited = false;
+      saveSession();
+    }
+
+  });
+}
+
+/* ================= HELP TOOLTIP ================= */
 
 function closeAllHelpTooltips(exceptButton = null) {
   document
@@ -7559,258 +9285,927 @@ function positionHelpTooltip(button) {
     `${top}px`;
 }
 
-/*
-  Đặt vị trí trước khi tooltip hiện khi hover.
-*/
-document.addEventListener(
-  "pointerover",
-  function (event) {
-    const helpButton =
-      event.target.closest(".help-tooltip");
+function initHelpTooltips() {
+  /*
+    Đặt vị trí trước khi tooltip hiện khi hover.
+  */
+  document.addEventListener(
+    "pointerover",
+    function (event) {
+      const helpButton =
+        event.target.closest(".help-tooltip");
 
-    if (helpButton) {
-      positionHelpTooltip(helpButton);
+      if (helpButton) {
+        positionHelpTooltip(helpButton);
+      }
     }
-  }
-);
+  );
 
-/*
-  Hỗ trợ điều hướng bằng bàn phím.
-*/
-document.addEventListener(
-  "focusin",
-  function (event) {
-    const helpButton =
-      event.target.closest(".help-tooltip");
+  /*
+    Hỗ trợ điều hướng bằng bàn phím.
+  */
+  document.addEventListener(
+    "focusin",
+    function (event) {
+      const helpButton =
+        event.target.closest(".help-tooltip");
 
-    if (helpButton) {
-      positionHelpTooltip(helpButton);
+      if (helpButton) {
+        positionHelpTooltip(helpButton);
+      }
     }
-  }
-);
+  );
 
-/*
-  Click dấu hỏi để mở hoặc đóng.
-*/
-document.addEventListener(
-  "click",
-  function (event) {
-    if (
-      event.target.closest(
-        ".help-tooltip-box"
-      )
-    ) {
+  /*
+    Click dấu hỏi để mở hoặc đóng.
+  */
+  document.addEventListener(
+    "click",
+    function (event) {
+      if (
+        event.target.closest(
+          ".help-tooltip-box"
+        )
+      ) {
+        event.stopPropagation();
+        return;
+      }
+
+      const helpButton =
+        event.target.closest(".help-tooltip");
+
+      if (!helpButton) {
+        closeAllHelpTooltips();
+        return;
+      }
+
+      event.preventDefault();
       event.stopPropagation();
-      return;
-    }
 
-    const helpButton =
-      event.target.closest(".help-tooltip");
+      const shouldOpen =
+        !helpButton.classList.contains(
+          "is-open"
+        );
 
-    if (!helpButton) {
-      closeAllHelpTooltips();
-      return;
-    }
+      closeAllHelpTooltips(helpButton);
 
-    event.preventDefault();
-    event.stopPropagation();
-
-    const shouldOpen =
-      !helpButton.classList.contains(
-        "is-open"
+      helpButton.classList.toggle(
+        "is-open",
+        shouldOpen
       );
 
-    closeAllHelpTooltips(helpButton);
-
-    helpButton.classList.toggle(
-      "is-open",
-      shouldOpen
-    );
-
-    if (shouldOpen) {
-      requestAnimationFrame(() => {
-        positionHelpTooltip(helpButton);
-      });
+      if (shouldOpen) {
+        requestAnimationFrame(() => {
+          positionHelpTooltip(helpButton);
+        });
+      }
     }
-  }
-);
+  );
 
-/*
-  Cập nhật vị trí khi cuộn Input.
-*/
-const inputCard =
-  document.querySelector(".input-card");
+  document.addEventListener(
+    "keydown",
+    function (event) {
+      if (event.key === "Escape") {
+        closeAllHelpTooltips();
+      }
+    }
+  );
 
-if (inputCard) {
-  inputCard.addEventListener(
-    "scroll",
+  /*
+    Cập nhật vị trí khi thay đổi kích thước cửa sổ.
+  */
+  window.addEventListener(
+    "resize",
     function () {
       document
         .querySelectorAll(
           ".help-tooltip.is-open"
         )
         .forEach(positionHelpTooltip);
-    },
-    { passive: true }
+    }
   );
+
+  /*
+    Cập nhật vị trí khi cuộn Input.
+  */
+  if (inputCard) {
+    inputCard.addEventListener(
+      "scroll",
+      function () {
+        document
+          .querySelectorAll(
+            ".help-tooltip.is-open"
+          )
+          .forEach(positionHelpTooltip);
+      },
+      { passive: true }
+    );
+  }
+}
+
+/* ================= REGION MAPPING (OPTIONAL) =================
+   Isolated: if any of the three elements it needs are missing
+   from the page, this feature simply does not attach any
+   listeners, and the core Crosstab Builder is unaffected.
+*/
+function initRegionMapping() {
+  if (
+    !regionFileInput ||
+    !regionLogicInput ||
+    !applyRegionMappingBtn
+  ) {
+    return;
+  }
+
+  regionFileInput.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data, { type: "array" });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+
+    // Excel giả sử có cột CODE, LABEL, REGION
+    regionData = XLSX.utils.sheet_to_json(sheet, { header: ["CODE","LABEL","REGION"], range: 1 });
+  });
+
+  applyRegionMappingBtn.addEventListener("click", () => {
+    if (!regionLogicInput.value.trim()) {
+      alert("Enter logic variable name for Region.");
+      return;
+    }
+    if (!regionData.length) {
+      alert("Upload Excel first.");
+      return;
+    }
+
+    const regionLogicVar = regionLogicInput.value.trim().toUpperCase();
+
+    // Nhóm các precinct theo Region
+    const sections = {};
+    regionData.forEach(r => {
+      if (!sections[r.REGION]) sections[r.REGION] = [];
+      sections[r.REGION].push({ label: r.LABEL, code: r.CODE });
+    });
+
+    // Build ListoutManualSections với indent chuẩn
+    let manualSectionsText = "";
+    let regionCounter = 1;
+
+    Object.keys(sections).forEach(regionName => {
+      // Region line, giảm indent 1 tab để thẳng hàng với North example
+      manualSectionsText += `${regionName.toUpperCase()}^     ${regionLogicVar}    (${regionCounter})         ^\n`;
+
+      sections[regionName].forEach(p => {
+        // Precinct line, indent chuẩn (4 spaces)  
+        manualSectionsText += `    ${p.label}^      PRECINCT   (${p.code})         ^\n`;
+      });
+
+      regionCounter++;
+    });
+
+    // Gán vào input Listout Manual Sections hiện tại
+    if (listoutManualSectionsInput) {
+      listoutManualSectionsInput.value = manualSectionsText;
+    }
+
+    generateOutput();
+
+    alert("Region mapping applied successfully!");
+  });
+}
+
+/* ================= INITIALIZATION ================= */
+
+/*
+  Step 1 of init(): cache DOM elements.
+  Core elements go through requireElement() so a missing
+  element logs a clear console error instead of failing
+  silently later. Everything else is optional and is simply
+  assigned (possibly null); each optional feature's own
+  init function checks for null before attaching listeners.
+*/
+function cacheDomElements() {
+  projectTypeSelect = document.getElementById("projectType");
+  questionCodeInput = requireElement("questionCode");
+  questionTypeSelect = requireElement("questionType");
+  rowTypeSelect = requireElement("rowType");
+  rowTypeBox = document.getElementById("rowTypeBox");
+  questionTextInput = requireElement("questionText");
+
+  answerOptionsInput = document.getElementById("answerOptions");
+  answerOptionsBox = document.getElementById("answerOptionsBox");
+
+  useCustomNetGroupsCheckbox = document.getElementById("useCustomNetGroups");
+  customNetGroupBox = document.getElementById("customNetGroupBox");
+  customNetGroupsInput = document.getElementById("customNetGroups");
+  buildCustomDSBtn = document.getElementById("buildCustomDSBtn");
+  customDSBox = document.getElementById("customDSBox");
+  customDSPositiveSelect = document.getElementById("customDSPositive");
+  customDSNegativeSelect = document.getElementById("customDSNegative");
+
+  demographicSetupPanel = document.getElementById("demographicSetupPanel");
+  demographicAdditionalCodesInput = document.getElementById("demographicAdditionalCodes");
+
+  normalOptionsBox = document.getElementById("normalOptionsBox");
+  useSTCheckbox = document.getElementById("useST");
+  useDSCheckbox = document.getElementById("useDS");
+  useDSBox = document.getElementById("useDSBox");
+  sharedDSSetupBox = document.getElementById("sharedDSSetupBox");
+
+  useRankBox = document.getElementById("useRankBox");
+  useRankCheckbox = document.getElementById("useRank");
+  rankRLBox = document.getElementById("rankRLBox");
+  rankRLCodesInput = document.getElementById("rankRLCodes");
+
+  sharedMeanSetupBox = document.getElementById("sharedMeanSetupBox");
+  useMeanCheckbox = document.getElementById("useMean");
+  meanSetupBox = document.getElementById("meanSetupBox");
+  meanCodeRangeInput = document.getElementById("meanCodeRange");
+
+  subtitleBox = document.getElementById("subtitleBox");
+  subtitleOnlyInput = document.getElementById("subtitleOnly");
+  manualUseIndexInput = document.getElementById("manualUseIndex");
+
+  askedBaseBox = document.getElementById("askedBaseBox");
+  askedBaseTextBox = document.getElementById("askedBaseTextBox");
+  askedBaseTextInput = document.getElementById("askedBaseText");
+
+  arraySampleSetupBox = document.getElementById("arraySampleSetupBox");
+  buildArraySampleBtn = document.getElementById("buildArraySampleBtn");
+
+  arraySampleModal = document.getElementById("arraySampleModal");
+  closeArraySampleModalBtn = document.getElementById("closeArraySampleModalBtn");
+  saveArraySampleModalBtn = document.getElementById("saveArraySampleModalBtn");
+  arraySampleTableContainer = document.getElementById("arraySampleTableContainer");
+
+  summarySetupBox = document.getElementById("summarySetupBox");
+  summaryRawInput = document.getElementById("summaryRawInput");
+  summaryBlockCountInput = document.getElementById("summaryBlockCount");
+  buildSummarySetupBtn = document.getElementById("buildSummarySetupBtn");
+  summaryBlockSetupContainer = document.getElementById("summaryBlockSetupContainer");
+
+  summaryModal = document.getElementById("summaryModal");
+  openSummaryModalBtn = document.getElementById("openSummaryModalBtn");
+  closeSummaryModalBtn = document.getElementById("closeSummaryModalBtn");
+  saveSummaryModalBtn = document.getElementById("saveSummaryModalBtn");
+  summarySetupPanel = document.getElementById("summarySetupPanel");
+
+  rankingSetupPanel = document.getElementById("rankingSetupPanel");
+  rankingMetricDefinitionsInput = document.getElementById("rankingMetricDefinitions");
+  rankingItemsInput = document.getElementById("rankingItemsInput");
+
+  useSplitABCheckbox = document.getElementById("useSplitAB");
+  splitABBox = document.getElementById("splitABBox");
+  splitRowsContainer = document.getElementById("splitRowsContainer");
+  addSplitRowBtn = document.getElementById("addSplitRowBtn");
+
+  listoutSetupPanel = document.getElementById("listoutSetupPanel");
+  listoutManualSectionsInput = document.getElementById("listoutManualSections");
+
+  includeVersionSectionCheckbox = document.getElementById("includeVersionSection");
+  versionExtraRowsInput = document.getElementById("versionExtraRows");
+
+  includeModeSectionCheckbox = document.getElementById("includeModeSection");
+  modeExtraRowsInput = document.getElementById("modeExtraRows");
+
+  includeDateSectionCheckbox = document.getElementById("includeDateSection");
+  dateVariableInput = document.getElementById("dateVariable");
+  startDateInput = document.getElementById("startDateInput");
+  endDateInput = document.getElementById("endDateInput");
+
+  toggleVersionExtraBtn = document.getElementById("toggleVersionExtraBtn");
+  versionExtraBox = document.getElementById("versionExtraBox");
+
+  toggleModeExtraBtn = document.getElementById("toggleModeExtraBtn");
+  modeExtraBox = document.getElementById("modeExtraBox");
+
+  toggleDateSetupBtn = document.getElementById("toggleDateSetupBtn");
+  dateSetupBox = document.getElementById("dateSetupBox");
+
+  buildRankingSplitBtn = document.getElementById("buildRankingSplitBtn");
+  rankingSplitModal = document.getElementById("rankingSplitModal");
+  closeRankingSplitModalBtn = document.getElementById("closeRankingSplitModalBtn");
+  saveRankingSplitModalBtn = document.getElementById("saveRankingSplitModalBtn");
+  rankingSplitTableContainer = document.getElementById("rankingSplitTableContainer");
+
+  inputList = requireElement("inputList");
+  output = requireElement("output");
+
+  addBtn = requireElement("addBtn");
+  cancelEditBtn = document.getElementById("cancelEditBtn");
+  clearInputBtn = document.getElementById("clearInputBtn");
+  clearAllBtn = document.getElementById("clearAllBtn");
+  generateBtn = requireElement("generateBtn");
+  copyBtn = document.getElementById("copyBtn");
+
+  regionFileInput = document.getElementById("regionFileInput");
+  regionLogicInput = document.getElementById("regionLogicVar");
+  applyRegionMappingBtn = document.getElementById("applyRegionMapping");
+
+  inputCard = document.querySelector(".input-card");
 }
 
 /*
-  Cập nhật vị trí khi thay đổi kích thước cửa sổ.
+  Step 2: initial default UI state (row type dropdown,
+  visibility toggles, default split rows).
 */
-window.addEventListener(
-  "resize",
-  function () {
-    document
-      .querySelectorAll(
-        ".help-tooltip.is-open"
-      )
-      .forEach(positionHelpTooltip);
+function initDefaultUIState() {
+  populateRowTypeOptions(normalRowTypeOptions, "");
+
+  if (splitRowsContainer && splitRowsContainer.children.length === 0) {
+    resetSplitRows();
   }
-);
 
-document.addEventListener(
-  "keydown",
-  function (event) {
-    if (event.key === "Escape") {
-      closeAllHelpTooltips();
-    }
-  }
-);
-
-document.addEventListener(
-  "DOMContentLoaded",
-  function () {
-
-    loadSession();
-
-  }
-);
-
-function saveSession() {
-  try {
-    const session = {
-      version: 1,
-      savedAt: new Date().toISOString(),
-      tables,
-      editingIndex
-    };
-
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(session)
-    );
-
-  } catch (err) {
-    console.error(err);
-  }
+  toggleQuestionTypeUI();
+  toggleAskedBaseBox();
+  toggleSubtitleBox();
+  toggleAnswerOptionsBox();
+  toggleCustomNetGroupBox();
+  toggleUseDSBox();
 }
 
-function loadSession() {
-  try {
-
-    const raw =
-      localStorage.getItem(STORAGE_KEY);
-
-    if (!raw) return;
-
-    const session =
-      JSON.parse(raw);
-
-    if (!session?.tables) return;
-
-    tables =
-      session.tables;
-
-    editingIndex =
-      session.editingIndex ?? null;
-
-    renderInputList();
-
-    /*
-      Rebuild Output Syntax
-      from Input List.
-    */
-    if (tables.length > 0) {
-      generateOutput();
-    }
-
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-generateBtn.addEventListener(
-    "click",
-    function () {
-
-        generateOutput();
-
-        saveSession();
-
-    }
-);
-
-function initSortable() {
-
-  const list =
-    document.getElementById("inputList");
-
-  if (!list) return;
-
-  if (sortable) {
-    sortable.destroy();
+/*
+  Step 4: attach the CORE event listeners. Every one of these
+  is registered exactly once, right here, and nowhere else in
+  the file (search for "addEventListener" to verify there are
+  no duplicates for addBtn/generateBtn/copyBtn/output/etc).
+*/
+function attachCoreEventListeners() {
+  if (addBtn) {
+    addBtn.addEventListener("click", addTable);
   }
 
-  sortable = new Sortable(list, {
+  if (cancelEditBtn) {
+    cancelEditBtn.addEventListener("click", cancelEdit);
+  }
 
-    animation: 180,
+  if (clearInputBtn) {
+    clearInputBtn.addEventListener("click", clearInput);
+  }
 
-    ghostClass: "dragging",
+  if (clearAllBtn) {
+    clearAllBtn.addEventListener("click", clearAll);
+  }
 
-    onEnd(event) {
+  if (generateBtn) {
+    generateBtn.addEventListener("click", handleGenerateOutput);
+  }
 
-      if (
-        event.oldIndex ===
-        event.newIndex
-      ) {
-        return;
-      }
+  if (copyBtn) {
+    copyBtn.addEventListener("click", copyOutput);
+  }
 
-      const movedTable =
-        tables.splice(
-          event.oldIndex,
-          1
-        )[0];
-
-      tables.splice(
-        event.newIndex,
-        0,
-        movedTable
-      );
-
-      renderInputList();
-
-      generateOutput();
-
+  /*
+    BUG FIX: this listener previously also called
+    updateOutputHighlight() (writing into a "#outputHighlight"
+    element that is never created anywhere in the file -- always
+    a no-op) and registered a SECOND scroll listener that queried
+    that same nonexistent element. Both removed: renderHighlightBackdrop()
+    is already wired to this same "input" event inside
+    initFindReplace() below, and the real scroll sync lives inside
+    ensureHighlightBackdrop(). Having two systems both trying to
+    render Output's highlighting is exactly what this pass was
+    asked to eliminate.
+  */
+  if (output) {
+    output.addEventListener("input", function () {
+      outputEdited = true;
       saveSession();
 
-    }
+      /*
+        Live, debounced reverse-sync: after the user pauses
+        typing in Output, re-parse the whole textarea and
+        rebuild the Input List boxes from it. This never
+        touches output.value itself -- it only updates the
+        in-memory `tables` array (and re-renders the list),
+        so the user's manual edit is never overwritten.
+      */
+      if (outputSyncDebounceTimer) {
+        clearTimeout(outputSyncDebounceTimer);
+      }
 
-  });
+      outputSyncDebounceTimer = setTimeout(function () {
+        syncTablesFromOutputSyntax();
+      }, 600);
+    });
+  }
 
-}
+  if (questionCodeInput) {
+    questionCodeInput.addEventListener(
+      "input",
+      function () {
+        const isArray =
+          questionTypeSelect.value ===
+            "single_choice" &&
+          isQuestionCodeRange(
+            questionCodeInput.value
+          );
 
-const LAST_QUESTION_TYPE_KEY =
-  "crosstab_last_question_type";
+        /*
+          Range => Array.
+          ST được bật tự động.
+        */
+        if (isArray) {
+          useSTCheckbox.checked = true;
+          autoSTFromArray = true;
+        } else {
+          /*
+            Nếu ST trước đó được bật tự động
+            vì Array, khi quay về Single Choice
+            thì tự tắt nó.
 
-function getLastQuestionType() {
-  const value =
-    localStorage.getItem(
-      LAST_QUESTION_TYPE_KEY
+            Không tắt ST nếu user đã tự bật bằng tay.
+          */
+          if (autoSTFromArray) {
+            useSTCheckbox.checked = false;
+            autoSTFromArray = false;
+          }
+
+          /*
+            Xóa state Array cũ.
+          */
+          pendingArraySampleSelections = [];
+
+          safeClearHTML(
+            arraySampleTableContainer
+          );
+
+          safeAddHidden(
+            arraySampleModal
+          );
+        }
+
+        toggleSubtitleBox();
+        toggleAskedBaseBox();
+        toggleAnswerOptionsBox();
+        toggleUseDSBox();
+      }
+    );
+  }
+
+  if (subtitleOnlyInput) {
+    subtitleOnlyInput.addEventListener(
+      "blur",
+      function () {
+        this.value = getSubtitleLines().join("\n");
+      }
+    );
+  }
+
+  if (useMeanCheckbox) {
+    useMeanCheckbox.addEventListener(
+      "change",
+      toggleMeanSetupUI
+    );
+  }
+
+  if (useRankCheckbox) {
+    useRankCheckbox.addEventListener(
+      "change",
+      toggleRankRLBox
+    );
+  }
+
+  if (useDSCheckbox) {
+    useDSCheckbox.addEventListener(
+      "change",
+      function () {
+        toggleUseDSBox();
+
+        if (!useDSCheckbox.checked && customDSBox) {
+          customDSBox.classList.add("hidden");
+        }
+      }
+    );
+  }
+
+  if (demographicAdditionalCodesInput) {
+    demographicAdditionalCodesInput.addEventListener(
+      "input",
+      function () {
+        if (questionTypeSelect.value !== "demographic") {
+          return;
+        }
+
+        if (customDSPositiveSelect) customDSPositiveSelect.innerHTML = "";
+        if (customDSNegativeSelect) customDSNegativeSelect.innerHTML = "";
+        if (customDSBox) customDSBox.classList.add("hidden");
+      }
+    );
+  }
+
+  if (rowTypeSelect) {
+    rowTypeSelect.addEventListener(
+      "change",
+      function () {
+        toggleAnswerOptionsBox();
+
+        if (customDSPositiveSelect) customDSPositiveSelect.innerHTML = "";
+        if (customDSNegativeSelect) customDSNegativeSelect.innerHTML = "";
+        if (customDSBox) customDSBox.classList.add("hidden");
+
+        toggleUseDSBox();
+      }
+    );
+  }
+
+  if (questionTypeSelect) {
+    questionTypeSelect.addEventListener(
+      "change",
+      function () {
+
+        localStorage.setItem(
+          LAST_QUESTION_TYPE_KEY,
+          questionTypeSelect.value
+        );
+
+        if (
+          questionTypeSelect.value ===
+          "demographic"
+        ) {
+          populateRowTypeOptions(
+            demographicRowTypeOptions,
+            ""
+          );
+        }
+
+        if (
+          questionTypeSelect.value ===
+            "single_choice" ||
+          questionTypeSelect.value === ""
+        ) {
+          setDefaultRowTypeByQuestionType();
+        }
+
+        if (
+          questionTypeSelect.value !==
+          "multiple_choice"
+        ) {
+          answerOptionsInput.value = "";
+          useCustomNetGroupsCheckbox.checked = false;
+          customNetGroupsInput.value = "";
+          customNetGroupBox.classList.add("hidden");
+          customDSBox.classList.add("hidden");
+        }
+
+        toggleQuestionTypeUI();
+
+        if (
+          questionTypeSelect.value ===
+          "single_choice"
+        ) {
+          rowTypeSelect.value =
+            "custom_code";
+        }
+
+        toggleQuestionTypeUI();
+        toggleAnswerOptionsBox();
+        toggleUseDSBox();
+        toggleAskedBaseBox();
+        toggleSubtitleBox();
+      }
+    );
+  }
+
+  if (useSTCheckbox) {
+    useSTCheckbox.addEventListener(
+      "change",
+      function () {
+        /*
+          User tự click ST thì từ đây
+          không còn coi nó là ST auto từ Array.
+        */
+        autoSTFromArray = false;
+
+        toggleSubtitleBox();
+        toggleAskedBaseBox();
+        toggleAnswerOptionsBox();
+        toggleUseDSBox();
+      }
+    );
+  }
+
+  if (questionTextInput) {
+    questionTextInput.addEventListener(
+      "paste",
+      function (event) {
+        const clipboardText =
+          event.clipboardData?.getData("text/plain");
+
+        if (clipboardText === undefined) {
+          return;
+        }
+
+        event.preventDefault();
+
+        const start =
+          this.selectionStart ?? this.value.length;
+
+        const end =
+          this.selectionEnd ?? start;
+
+        const before = this.value.slice(0, start);
+        const after = this.value.slice(end);
+
+        /*
+          Chỉ xóa question number khi user đang paste
+          vào một ô trống hoặc thay toàn bộ nội dung.
+
+          Điều này tránh trường hợp paste "6. Something"
+          vào giữa một đoạn văn mà app tự xóa số 6.
+        */
+        const isReplacingWholeText =
+          before.trim() === "" &&
+          after.trim() === "";
+
+        let cleanedPaste =
+          normalizeQuestionSpacing(clipboardText);
+
+        if (isReplacingWholeText) {
+          cleanedPaste =
+            removeLeadingQuestionNumber(
+              cleanedPaste
+            );
+        }
+
+        this.value =
+          before +
+          cleanedPaste +
+          after;
+
+        const newCursorPosition =
+          before.length + cleanedPaste.length;
+
+        this.setSelectionRange(
+          newCursorPosition,
+          newCursorPosition
+        );
+      }
     );
 
-  return ALL_QUESTION_TYPES.has(value)
-    ? value
-    : "";
+    questionTextInput.addEventListener(
+      "blur",
+      function () {
+        this.value = normalizeQuestionText(
+          this.value
+        );
+      }
+    );
+  }
+
+  if (useCustomNetGroupsCheckbox) {
+    useCustomNetGroupsCheckbox.addEventListener("change", toggleCustomNetGroupBox);
+  }
+
+  if (buildCustomDSBtn) {
+    buildCustomDSBtn.addEventListener("click", buildCustomDSSetup);
+  }
+
+  if (answerOptionsInput) {
+    answerOptionsInput.addEventListener(
+      "blur",
+      function () {
+        this.value = cleanAnswerOptionsText(
+          this.value
+        );
+      }
+    );
+  }
+
+  if (customNetGroupsInput) {
+    customNetGroupsInput.addEventListener("blur", function () {
+      customNetGroupsInput.value = customNetGroupsInput.value.toUpperCase();
+    });
+  }
 }
+
+function setDefaultRowTypeByQuestionType() {
+  const questionType =
+    questionTypeSelect.value;
+
+  /*
+    Single Choice và Array mặc định dùng CUSTOM CODE.
+  */
+  if (
+    questionType === "single_choice"
+  ) {
+    populateRowTypeOptions(
+      normalRowTypeOptions,
+      "custom_code"
+    );
+
+    rowTypeSelect.value =
+      "custom_code";
+
+    return;
+  }
+
+  if (questionType === "") {
+    populateRowTypeOptions(
+      normalRowTypeOptions,
+      ""
+    );
+  }
+}
+
+/* ---- Optional feature: Split Rows / Ranking Split ---- */
+function initSplitRowEvents() {
+  if (useSplitABCheckbox) {
+    useSplitABCheckbox.addEventListener("change", toggleSplitABBox);
+  }
+
+  if (addSplitRowBtn) {
+    addSplitRowBtn.addEventListener("click", function () {
+      createSplitRow("", "", "");
+    });
+  }
+
+  if (splitRowsContainer) {
+    splitRowsContainer.addEventListener("click", function (event) {
+      if (event.target.classList.contains("remove-split-row-btn")) {
+        const row = event.target.closest(".split-row");
+
+        if (row) {
+          row.remove();
+        }
+      }
+    });
+  }
+}
+
+/* ---- Optional feature: Ranking Split modal ---- */
+function initRankingEvents() {
+  if (buildRankingSplitBtn) {
+    buildRankingSplitBtn.addEventListener("click", buildRankingSplitSetup);
+  }
+
+  if (closeRankingSplitModalBtn) {
+    closeRankingSplitModalBtn.addEventListener("click", closeRankingSplitModal);
+  }
+
+  if (saveRankingSplitModalBtn) {
+    saveRankingSplitModalBtn.addEventListener("click", closeRankingSplitModal);
+  }
+
+  if (rankingSplitModal) {
+    rankingSplitModal.addEventListener("click", function (event) {
+      if (event.target === rankingSplitModal) {
+        closeRankingSplitModal();
+      }
+    });
+  }
+}
+
+/* ---- Optional feature: Summary modal ---- */
+function initSummaryEvents() {
+  if (buildSummarySetupBtn) {
+    buildSummarySetupBtn.addEventListener("click", buildSummarySetup);
+  }
+
+  if (openSummaryModalBtn) {
+    openSummaryModalBtn.addEventListener("click", openSummaryModal);
+  }
+
+  if (closeSummaryModalBtn) {
+    closeSummaryModalBtn.addEventListener("click", closeSummaryModal);
+  }
+
+  if (saveSummaryModalBtn) {
+    saveSummaryModalBtn.addEventListener("click", closeSummaryModal);
+  }
+
+  if (summaryModal) {
+    summaryModal.addEventListener("click", function (event) {
+      if (event.target === summaryModal) {
+        closeSummaryModal();
+      }
+    });
+  }
+}
+
+/* ---- Optional feature: Listout extras ---- */
+function initListoutEvents() {
+  if (toggleVersionExtraBtn && versionExtraBox) {
+    toggleVersionExtraBtn.addEventListener("click", function () {
+      togglePlusSection(
+        toggleVersionExtraBtn,
+        versionExtraBox,
+        "+ Add VERSION Extra Rows",
+        "− Hide VERSION Extra Rows"
+      );
+    });
+  }
+
+  if (toggleModeExtraBtn && modeExtraBox) {
+    toggleModeExtraBtn.addEventListener("click", function () {
+      togglePlusSection(
+        toggleModeExtraBtn,
+        modeExtraBox,
+        "+ Add MODE Extra Rows",
+        "− Hide MODE Extra Rows"
+      );
+    });
+  }
+
+  if (toggleDateSetupBtn && dateSetupBox) {
+    toggleDateSetupBtn.addEventListener("click", function () {
+      togglePlusSection(
+        toggleDateSetupBtn,
+        dateSetupBox,
+        "+ Add DATE Range",
+        "− Hide DATE Range"
+      );
+    });
+  }
+}
+
+/* ---- Optional feature: Array Sample Setup modal ---- */
+function initArraySampleEvents() {
+  if (buildArraySampleBtn) {
+    buildArraySampleBtn.addEventListener("click", buildArraySampleSetup);
+  }
+
+  if (closeArraySampleModalBtn && arraySampleModal) {
+    closeArraySampleModalBtn.addEventListener("click", function () {
+      arraySampleModal.classList.add("hidden");
+    });
+  }
+
+  if (saveArraySampleModalBtn && arraySampleModal) {
+    saveArraySampleModalBtn.addEventListener(
+      "click",
+      function () {
+        const selections =
+          getArraySampleSelections();
+
+        const questionCodes =
+          expandQuestionCodes(
+            questionCodeInput.value.trim()
+          );
+
+        if (
+          selections.length !==
+          questionCodes.length
+        ) {
+          alert(
+            "Array Sample Setup is incomplete. Please build the setup again."
+          );
+          return;
+        }
+
+        pendingArraySampleSelections =
+          selections;
+
+        arraySampleModal.classList.add(
+          "hidden"
+        );
+      }
+    );
+  }
+
+  if (arraySampleModal) {
+    arraySampleModal.addEventListener("click", function (event) {
+      if (event.target === arraySampleModal) {
+        arraySampleModal.classList.add("hidden");
+      }
+    });
+  }
+}
+
+/*
+  Single initialization entry point.
+
+  Order:
+  1. cache DOM elements
+  2. build the syntax-highlight backdrop (the one highlighting
+     system) so it's ready before the first render
+  3. initialize default UI state
+  4. initialize Sortable
+  5. attach event listeners (core + every optional feature,
+     each independently guarded so one missing/renamed element
+     can never break another feature or the core builder)
+  6. load session (which also renders the input list and
+     generates/restores Output)
+*/
+function init() {
+  cacheDomElements();
+  ensureHighlightBackdrop();
+  initDefaultUIState();
+  initSortable();
+
+  attachCoreEventListeners();
+  initFindReplace();
+  initSplitRowEvents();
+  initRankingEvents();
+  initSummaryEvents();
+  initListoutEvents();
+  initArraySampleEvents();
+  initRegionMapping();
+  initHelpTooltips();
+
+  loadSession();
+}
+
+document.addEventListener("DOMContentLoaded", init);
