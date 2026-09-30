@@ -61,6 +61,7 @@
   </select>
 </div>
 
+<div id="normalInputFields">
 <div class="form-group">
   <div class="field-label-row">
     <label for="questionType">
@@ -1079,6 +1080,24 @@ APP | modetype | 6"></textarea>
 </div>
 
 </div> <!-- đóng listoutSetupPanel -->
+</div><!-- /normalInputFields -->
+
+<div id="f4InputPanel" class="hidden">
+  <div class="f4-upload-row">
+    <label class="f4-upload-btn">Upload Excel<input id="f4ExcelInput" type="file" accept=".xlsx,.xls,.csv" hidden></label>
+    <label class="f4-upload-btn secondary">Upload SPSS<input id="f4SpssInput" type="file" accept=".sav" hidden></label>
+  </div>
+  <div class="f4-file-status" id="f4FileStatus">Upload a Crosstab List and, optionally, an SPSS .sav file.</div>
+  <button id="f4GeneratorBtn" type="button" class="f4-generator-btn">Generator</button>
+  <div id="f4ValidationPanel" class="f4-validation-panel hidden">
+    <h3>SPSS Validation</h3>
+    <div id="f4ValidationSummary" class="f4-warnings"></div>
+    <div class="f4-table-scroll"><table class="f4-table f4-validation-table">
+      <thead><tr><th>#</th><th>Question</th><th>Logic Code</th><th>Status</th><th>Details</th></tr></thead>
+      <tbody id="f4ValidationBody"></tbody>
+    </table></div>
+  </div>
+</div>
 
         <div class="button-row">
           <button id="addBtn">Add Table</button>
@@ -1111,6 +1130,28 @@ APP | modetype | 6"></textarea>
 
     </main>
 
+  </div>
+
+  <!-- F4 Crosstab Generator -->
+  <div id="f4GeneratorModal" class="modal-overlay hidden">
+    <div class="modal-box f4-modal-box">
+      <div class="modal-header">
+        <h2>F4 Crosstab Generator</h2>
+        <button id="closeF4GeneratorBtn" type="button" class="modal-close">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-help">Edit the Crosstab List below. Row order controls the generated table order. Original text is preserved for editing.</p>
+        <div class="f4-table-scroll"><table class="f4-table">
+          <thead><tr><th>#</th><th>Question</th><th>Label</th><th>Logic Code</th><th>Group</th><th>Warnings</th><th>Actions</th></tr></thead>
+          <tbody id="f4GeneratorBody"></tbody>
+        </table></div>
+        <button id="f4AddRowBtn" type="button" class="secondary small-btn">+ Add Row</button>
+      </div>
+      <div class="modal-footer f4-modal-footer">
+        <button id="f4CancelGeneratorBtn" type="button" class="secondary">Cancel</button>
+        <button id="f4SaveGeneratorBtn" type="button">OK</button>
+      </div>
+    </div>
   </div>
 
   <!-- Popup/modal để edit Summary Blocks -->
