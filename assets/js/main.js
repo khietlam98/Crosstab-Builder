@@ -4093,14 +4093,20 @@ function collectF4Tables() {
     );
   }
 
-  function normalizeSummaryTitle(title) {
-    return String(title || "")
-      .replace(/[–—]/g, "-")
-      .replace(/\s+-\s+/g, " ")
-      .replace(/\bD\/S\b/gi, "(D/S)")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
+  
+function normalizeSummaryTitle(title) {
+  return String(title || "")
+    .replace(/[–—]/g, "-")
+    .replace(/\s+-\s+/g, " ")
+    // Normalize D/S and remove duplicated parentheses.
+    .replace(
+      /(?:\(\s*)*\bD\/S\b(?:\s*\))*/gi,
+      "(D/S)"
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 
   function normalizeSummaryLabel(label) {
     return String(label || "")
